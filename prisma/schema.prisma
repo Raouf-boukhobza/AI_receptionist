@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model tenants {
+  id                       String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  business_name            String        @db.VarChar(255)
+  email                    String        @unique @db.VarChar(255)
+  password_hash            String        @db.VarChar(255)
+  waba_id                  String?       @unique @db.VarChar(255)
+  phone_number_id          String?       @unique @db.VarChar(255)
+  access_token             String?       @db.VarChar(255)
+  status                   tenant_status @default(incomplete)
+  whatsapp_connected_at    DateTime?     @db.Timestamp(6)
+  knowledge_base_passed_at DateTime?     @db.Timestamp(6)
+  created_at               DateTime      @default(now()) @db.Timestamp(6)
+  updated_at               DateTime      @default(now()) @db.Timestamp(6)
+}
+
+enum tenant_status {
+  active
+  incomplete
+  expired
+}
