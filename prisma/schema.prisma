@@ -25,6 +25,7 @@ model tenants {
   doctor_services          doctor_services[]
   doctors                  doctors[]
   messages                 messages[]
+  notifications            notifications[]
   services                 services[]
 }
 
@@ -129,6 +130,19 @@ model bookings {
   @@index([tenant_id], map: "idx_bookings_tenants")
 }
 
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model notifications {
+  id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id  String            @db.Uuid
+  type       notification_type
+  link       String?
+  read_at    DateTime?         @db.Timestamptz(6)
+  created_at DateTime          @default(now()) @db.Timestamptz(6)
+  tenants    tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tenant_id], map: "idx_notifications_tenants")
+}
+
 enum tenant_status {
   active
   incomplete
@@ -151,4 +165,11 @@ enum booking_status {
   confirmed
   cancelled
   completed
+}
+
+enum notification_type {
+  ai_escalation
+  booking_created
+  subscription_expiring
+  payment_failed
 }
