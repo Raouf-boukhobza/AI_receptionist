@@ -20,6 +20,7 @@ model tenants {
   knowledge_base_passed_at DateTime?         @db.Timestamp(6)
   created_at               DateTime          @default(now()) @db.Timestamp(6)
   updated_at               DateTime          @default(now()) @db.Timestamp(6)
+  bookings                 bookings[]
   conversations            conversations[]
   doctor_services          doctor_services[]
   doctors                  doctors[]
@@ -36,6 +37,7 @@ model services {
   duration_minutes Int
   created_at       DateTime          @default(now()) @db.Timestamptz(6)
   updated_at       DateTime          @default(now()) @db.Timestamptz(6)
+  bookings         bookings[]
   doctor_services  doctor_services[]
   tenants          tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -49,6 +51,7 @@ model doctors {
   name            String
   created_at      DateTime          @default(now()) @db.Timestamptz(6)
   updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  bookings        bookings[]
   doctor_services doctor_services[]
   tenants         tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -102,6 +105,30 @@ model messages {
   @@index([tenant_id], map: "idx_messages_tenants")
 }
 
+/// This table contains exclusion constraints and requires additional setup for migrations. Visit https://pris.ly/d/exclusion-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model bookings {
+  id                  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id           String         @db.Uuid
+  doctor_id           String         @db.Uuid
+  service_id          String         @db.Uuid
+  client_phone        String
+  start_time          DateTime       @db.Timestamptz(6)
+  end_time            DateTime       @db.Timestamptz(6)
+  status              booking_status @default(confirmed)
+  reminder_24h_job_id String?
+  reminder_1h_job_id  String?
+  created_at          DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime       @default(now()) @db.Timestamptz(6)
+  doctors             doctors        @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  services            services       @relation(fields: [service_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants             tenants        @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([doctor_id], map: "idx_bookings_doctor")
+  @@index([start_time], map: "idx_bookings_start_time")
+  @@index([tenant_id], map: "idx_bookings_tenants")
+}
+
 enum tenant_status {
   active
   incomplete
@@ -118,4 +145,10 @@ enum message_sender {
   client
   ai
   owner
+}
+
+enum booking_status {
+  confirmed
+  cancelled
+  completed
 }
