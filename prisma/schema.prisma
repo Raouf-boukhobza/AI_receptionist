@@ -24,6 +24,7 @@ model tenants {
   conversations            conversations[]
   doctor_services          doctor_services[]
   doctors                  doctors[]
+  knowledge_base           knowledge_base[]
   messages                 messages[]
   notifications            notifications[]
   services                 services[]
@@ -141,6 +142,20 @@ model notifications {
   tenants    tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([tenant_id], map: "idx_notifications_tenants")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model knowledge_base {
+  id         String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id  String                @db.Uuid
+  content    String
+  embedding  Unsupported("vector")
+  metadata   Json                  @default("{}")
+  created_at DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at DateTime              @default(now()) @db.Timestamptz(6)
+  tenants    tenants               @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tenant_id], map: "idx_knowledge_base_tenants")
 }
 
 enum tenant_status {
