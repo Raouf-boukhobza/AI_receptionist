@@ -1,4 +1,4 @@
-node_modules
+../node_modules
 dist
 .git
 .gitignore
@@ -8,5 +8,5 @@ coverage
 test
 *.md
 Dockerfile
-docker-compose.yml
+docker/docker-compose.yml
 .dockerignore
