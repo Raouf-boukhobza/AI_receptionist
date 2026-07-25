@@ -2,6 +2,7 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {PrismaClient} from '../../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { tenantContextStorage } from '../tenant-context/tenant-context.storage';
+import { Prisma } from '@prisma/client/extension';
 
 @Injectable()
 export class PrismaService  implements OnModuleInit,OnModuleDestroy{
@@ -19,12 +20,13 @@ export class PrismaService  implements OnModuleInit,OnModuleDestroy{
     await this.client.$disconnect();
   }
 
-  public get db() : PrismaClient {
+  public get db(): Prisma.TransactionClient {
     const context = tenantContextStorage.getStore();
-    const activeClient = context?.tx ?? this.client;
-    return new Proxy(activeClient, {
-      get: (target, prop) => (target as any)[prop],
-    }) as PrismaClient;
+    return context?.tx ?? this.client;
+  }
+
+  public get rawClient(): PrismaClient {
+    return this.client;
   }
 
 }
