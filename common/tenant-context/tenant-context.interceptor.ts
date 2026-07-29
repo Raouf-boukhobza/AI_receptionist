@@ -17,14 +17,26 @@ export class TenantContextInterceptor implements NestInterceptor {
     context: ExecutionContext,
     next: CallHandler<any>,
   ): Observable<any> {
-    const tenantId = '22fefdfa-295f-4206-bd08-113abb260533';
+    const UUID_REGEX =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const request = context.switchToHttp().getRequest();
+    const tenantId = request.user?.id;
+    if (!tenantId) {
+      next.handle()
+    }
+    if (!UUID_REGEX.test(tenantId)) {
+      throw new Error('Invalid tenantId');
+    }
+    this.logger.log(
+      `Setting tenantId=${tenantId} for request`,
+    )
     const resultPromise = this.prisma.rawClient.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(
         `SET LOCAL app.current_tenant = '${tenantId}'`,
       );
       return tenantContextStorage.run({ tenantId, tx }, async () => {
         try {
-          return firstValueFrom(next.handle());
+          return await firstValueFrom(next.handle());
         } catch (err) {
           this.logger.error(
             `Request failed for tenantId=${tenantId}`,
