@@ -24,6 +24,7 @@ model tenants {
   business_phone           String            @db.VarChar(255)
   name                     String            @db.VarChar(255)
   personal_phone           String            @db.VarChar(255)
+  refresh_token            String?           @db.VarChar(255)
   bookings                 bookings[]
   conversations            conversations[]
   doctor_services          doctor_services[]

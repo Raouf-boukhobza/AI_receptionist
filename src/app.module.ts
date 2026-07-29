@@ -3,9 +3,10 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CommonModule } from '../common/common.module';
 import { TenantModule } from './modules/tenantModule/tenant.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [CommonModule , TenantModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), CommonModule, TenantModule],
   controllers: [AppController],
   providers: [AppService],
 })
