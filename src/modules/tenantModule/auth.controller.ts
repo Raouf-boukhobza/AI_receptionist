@@ -4,6 +4,7 @@ import { SignupDto } from './dtos/signup.dto';
 import { LoginDto } from './dtos/login.dto';
 import { RefreshTokenDto } from './dtos/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt.guard';
+import { TenantId } from '../../../common/tenant-context/tenant-id.decorator';
 
 
 @Controller({
@@ -31,8 +32,8 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  getProfile(@Req() req) {
-    return req.user;
+  getProfile(@Req() req, @TenantId() tenant_id: string) {
+    return { ...req.user, tenant_id };
   }
 
 }
