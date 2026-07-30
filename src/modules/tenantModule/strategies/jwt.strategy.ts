@@ -7,6 +7,7 @@ interface AccessTokenPayload {
   sub: string;
   email: string;
   type: string;
+  tenant_id?: string;
 }
 
 @Injectable()
@@ -22,6 +23,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (payload.type !== 'access') {
       throw new UnauthorizedException('Invalid token type');
     }
-    return { id: payload.sub, email: payload.email };
+    return {
+      id: payload.sub,
+      tenant_id: payload.tenant_id ?? payload.sub,
+      email: payload.email,
+    };
   }
 }
