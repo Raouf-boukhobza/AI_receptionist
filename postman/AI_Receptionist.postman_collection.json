@@ -29,6 +29,11 @@
 			"key": "doctorHourId",
 			"value": "",
 			"type": "string"
+		},
+		{
+			"key": "faqId",
+			"value": "",
+			"type": "string"
 		}
 	],
 	"auth": {
@@ -419,6 +424,126 @@
 							"path": ["api", "v1", "doctors", "{{doctorId}}", "hours", "{{doctorHourId}}"]
 						},
 						"description": "DELETE /api/v1/doctors/:doctorId/hours/:id\n\nDeletes a doctor-hours entry.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor\n\nPath params:\n- doctorId (UUID, required)\n- id (UUID, required)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "FAQs",
+			"description": "Frequently Asked Questions endpoints.\n\nAll endpoints require Bearer authentication and the TenantContext interceptor.",
+			"item": [
+				{
+					"name": "Create FAQ",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const res = pm.response.json();",
+									"",
+									"if (res.id) {",
+									"    pm.collectionVariables.set('faqId', res.id);",
+									"    console.log('✅ faqId saved:', res.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"question\": \"What are your opening hours?\",\n\t\"answer\": \"We are open Monday to Friday from 8:00 AM to 5:00 PM.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/faqs",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "faqs"]
+						},
+						"description": "POST /api/v1/faqs\n\nCreates a new FAQ for the authenticated tenant.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor\n\nBody (CreateFaqDto):\n- question (string, required)\n- answer (string, required)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All FAQs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/faqs",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "faqs"]
+						},
+						"description": "GET /api/v1/faqs\n\nReturns all FAQs for the authenticated tenant.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor"
+					},
+					"response": []
+				},
+				{
+					"name": "Get FAQ by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/faqs/{{faqId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "faqs", "{{faqId}}"]
+						},
+						"description": "GET /api/v1/faqs/:id\n\nReturns a single FAQ by its ID.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor"
+					},
+					"response": []
+				},
+				{
+					"name": "Update FAQ",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"question\": \"Updated Question?\",\n\t\"answer\": \"Updated Answer.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/faqs/{{faqId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "faqs", "{{faqId}}"]
+						},
+						"description": "PATCH /api/v1/faqs/:id\n\nPartially updates an FAQ.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor\n\nBody (UpdateFaqDto) — all fields optional:\n- question (string, optional)\n- answer (string, optional)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete FAQ",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/faqs/{{faqId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "faqs", "{{faqId}}"]
+						},
+						"description": "DELETE /api/v1/faqs/:id\n\nDeletes an FAQ by ID.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor"
 					},
 					"response": []
 				}
