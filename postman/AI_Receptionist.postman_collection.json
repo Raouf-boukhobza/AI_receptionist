@@ -1,0 +1,428 @@
+{
+	"info": {
+		"name": "AI Receptionist",
+		"description": "Complete Postman collection for the AI Receptionist NestJS API.\n\nGlobal prefix: /api\nVersioning: URI (v1)\nAuthentication: Bearer JWT\n\nAfter calling Login, the access_token is automatically saved to the {{accessToken}} collection variable.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "accessToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refreshToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "doctorId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "doctorHourId",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{accessToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "App",
+			"description": "Root application endpoints (health check).",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api",
+							"host": ["{{baseUrl}}"],
+							"path": ["api"]
+						},
+						"description": "GET /api — Returns a hello string. No authentication required."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Auth",
+			"description": "Authentication endpoints: signup, login, token refresh, and profile.\n\nThe Login request includes a test script that automatically stores the JWT as {{accessToken}} and the refresh token as {{refreshToken}}.",
+			"item": [
+				{
+					"name": "Signup",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"email\": \"clinic@example.com\",\n\t\"password\": \"SecurePass123\",\n\t\"name\": \"Dr. Ahmed\",\n\t\"business_name\": \"Ahmed Dental Clinic\",\n\t\"business_phone\": \"+213555000001\",\n\t\"personal_phone\": \"+213555000002\",\n\t\"address\": \"123 Main Street, Algiers\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/signup",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "signup"]
+						},
+						"description": "POST /api/v1/auth/signup\n\nRegisters a new tenant.\n\nBody (SignupDto):\n- email (string, required) — valid email\n- password (string, required) — 8-20 characters\n- name (string, required)\n- business_name (string, required)\n- business_phone (string, required) — valid phone number\n- personal_phone (string, required) — valid phone number\n- address (string, optional)"
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const res = pm.response.json();",
+									"",
+									"if (res.access_token) {",
+									"    pm.collectionVariables.set('accessToken', res.access_token);",
+									"    console.log('✅ accessToken saved');",
+									"}",
+									"",
+									"if (res.refresh_token) {",
+									"    pm.collectionVariables.set('refreshToken', res.refresh_token);",
+									"    console.log('✅ refreshToken saved');",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"email\": \"clinic@example.com\",\n\t\"password\": \"SecurePass123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "login"]
+						},
+						"description": "POST /api/v1/auth/login\n\nAuthenticates a tenant and returns JWT tokens.\nThe test script automatically saves access_token → {{accessToken}} and refresh_token → {{refreshToken}}.\n\nBody (LoginDto):\n- email (string, required) — valid email\n- password (string, required) — 8-20 characters"
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const res = pm.response.json();",
+									"",
+									"if (res.access_token) {",
+									"    pm.collectionVariables.set('accessToken', res.access_token);",
+									"    console.log('✅ accessToken refreshed');",
+									"}",
+									"",
+									"if (res.refresh_token) {",
+									"    pm.collectionVariables.set('refreshToken', res.refresh_token);",
+									"    console.log('✅ refreshToken refreshed');",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"refresh_token\": \"{{refreshToken}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/refresh",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "refresh"]
+						},
+						"description": "POST /api/v1/auth/refresh\n\nExchanges a refresh token for a new access/refresh token pair.\nThe test script automatically updates {{accessToken}} and {{refreshToken}}.\n\nBody (RefreshTokenDto):\n- refresh_token (string, required)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Profile (me)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/me",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "me"]
+						},
+						"description": "GET /api/v1/auth/me\n\nReturns the authenticated tenant's profile including tenant_id.\n\nRequires: Bearer {{accessToken}} (inherited from collection).\nGuard: JwtAuthGuard"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Services",
+			"description": "Service management endpoints.\n\nAll endpoints require Bearer authentication and the TenantContext interceptor (tenant_id is extracted from the JWT).",
+			"item": [
+				{
+					"name": "Create Service",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"name\": \"Dental Cleaning\",\n\t\"price\": 3500.00,\n\t\"duration_minutes\": 30\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/services",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "services"]
+						},
+						"description": "POST /api/v1/services\n\nCreates a new service for the authenticated tenant.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor\n\nBody (CreateServiceDto):\n- name (string, required)\n- price (number, required) — max 2 decimal places, min 0\n- duration_minutes (integer, required) — min 1"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Doctors",
+			"description": "Doctor management endpoints.\n\nAll endpoints require Bearer authentication and the TenantContext interceptor.",
+			"item": [
+				{
+					"name": "Create Doctor",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const res = pm.response.json();",
+									"",
+									"if (res.id) {",
+									"    pm.collectionVariables.set('doctorId', res.id);",
+									"    console.log('✅ doctorId saved:', res.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"name\": \"Dr. Karim Benali\",\n\t\"service_ids\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/doctors",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "doctors"]
+						},
+						"description": "POST /api/v1/doctors\n\nCreates a new doctor for the authenticated tenant.\nThe test script automatically saves the returned id → {{doctorId}}.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor\n\nBody (CreateDoctorDto):\n- name (string, required)\n- service_ids (string[] of UUIDs, optional) — links the doctor to existing services"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Doctor Hours",
+			"description": "Doctor availability / working hours endpoints.\n\nAll endpoints require Bearer authentication and the TenantContext interceptor.\nAll routes are nested under /api/v1/doctors/:doctorId/hours.",
+			"item": [
+				{
+					"name": "Create Doctor Hours",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const res = pm.response.json();",
+									"",
+									"if (res.id) {",
+									"    pm.collectionVariables.set('doctorHourId', res.id);",
+									"    console.log('✅ doctorHourId saved:', res.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"day\": \"MONDAY\",\n\t\"start_time\": \"08:00\",\n\t\"end_time\": \"17:00\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/doctors/{{doctorId}}/hours",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "doctors", "{{doctorId}}", "hours"]
+						},
+						"description": "POST /api/v1/doctors/:doctorId/hours\n\nCreates working hours for a specific doctor.\nThe test script automatically saves the returned id → {{doctorHourId}}.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor\n\nPath params:\n- doctorId (UUID, required)\n\nBody (CreateDoctorHoursDto):\n- day (enum, required) — one of: MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY\n- start_time (string, required) — e.g. \"08:00\"\n- end_time (string, required) — e.g. \"17:00\"\n\nNote: A doctor can only have one entry per day (unique constraint on [doctor_id, day])."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Doctor Hours",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/doctors/{{doctorId}}/hours",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "doctors", "{{doctorId}}", "hours"]
+						},
+						"description": "GET /api/v1/doctors/:doctorId/hours\n\nReturns all working-hours entries for a specific doctor.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor\n\nPath params:\n- doctorId (UUID, required)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Doctor Hour by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/doctors/{{doctorId}}/hours/{{doctorHourId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "doctors", "{{doctorId}}", "hours", "{{doctorHourId}}"]
+						},
+						"description": "GET /api/v1/doctors/:doctorId/hours/:id\n\nReturns a single doctor-hours entry by its ID.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor\n\nPath params:\n- doctorId (UUID, required)\n- id (UUID, required) — the doctor_hours record ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Doctor Hour",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"day\": \"TUESDAY\",\n\t\"start_time\": \"09:00\",\n\t\"end_time\": \"18:00\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/doctors/{{doctorId}}/hours/{{doctorHourId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "doctors", "{{doctorId}}", "hours", "{{doctorHourId}}"]
+						},
+						"description": "PATCH /api/v1/doctors/:doctorId/hours/:id\n\nPartially updates a doctor-hours entry.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor\n\nPath params:\n- doctorId (UUID, required)\n- id (UUID, required)\n\nBody (UpdateDoctorHoursDto) — all fields optional:\n- day (enum, optional) — MONDAY | TUESDAY | WEDNESDAY | THURSDAY | FRIDAY | SATURDAY | SUNDAY\n- start_time (string, optional)\n- end_time (string, optional)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Doctor Hour",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/doctors/{{doctorId}}/hours/{{doctorHourId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "doctors", "{{doctorId}}", "hours", "{{doctorHourId}}"]
+						},
+						"description": "DELETE /api/v1/doctors/:doctorId/hours/:id\n\nDeletes a doctor-hours entry.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor\n\nPath params:\n- doctorId (UUID, required)\n- id (UUID, required)"
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
