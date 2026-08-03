@@ -11,7 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dtos/login.dto';
 import { RefreshTokenDto } from './dtos/refresh-token.dto';
 import { ConfigService } from '@nestjs/config';
-import type { StringValue } from "ms";
+import type { StringValue } from 'ms';
 
 @Injectable()
 export class TenantService {
@@ -154,9 +154,12 @@ export class TenantService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    return this.buildAuthTokens({
-      id: tenant.id,
-      email: tenant.email,
-    }, '30m');
+    return this.buildAuthTokens(
+      {
+        id: tenant.id,
+        email: tenant.email,
+      },
+      '30m',
+    );
   }
 }

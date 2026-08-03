@@ -39,10 +39,7 @@ export class FaqsController {
   }
 
   @Get(':id')
-  async getFaqById(
-    @TenantId() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  async getFaqById(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.faqsService.getFaqById(tenantId, id);
   }
 
@@ -56,10 +53,7 @@ export class FaqsController {
   }
 
   @Delete(':id')
-  async deleteFaq(
-    @TenantId() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  async deleteFaq(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.faqsService.deleteFaq(tenantId, id);
   }
 }

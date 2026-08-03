@@ -12,12 +12,17 @@ import { Prisma } from 'generated/prisma/client';
 export class DoctorHoursService {
   constructor(private readonly prismaService: PrismaService) {}
 
-  private async verifyDoctorBelongsToTenant(tenantId: string, doctorId: string) {
+  private async verifyDoctorBelongsToTenant(
+    tenantId: string,
+    doctorId: string,
+  ) {
     const doctor = await this.prismaService.db.doctors.findFirst({
       where: { id: doctorId, tenant_id: tenantId },
     });
     if (!doctor) {
-      throw new NotFoundException('Doctor not found or does not belong to this tenant');
+      throw new NotFoundException(
+        'Doctor not found or does not belong to this tenant',
+      );
     }
     return doctor;
   }
@@ -73,7 +78,9 @@ export class DoctorHoursService {
     });
 
     if (!doctorHour) {
-      throw new NotFoundException('Doctor hours record not found for this doctor');
+      throw new NotFoundException(
+        'Doctor hours record not found for this doctor',
+      );
     }
 
     return doctorHour;
@@ -92,7 +99,9 @@ export class DoctorHoursService {
     });
 
     if (!existing) {
-      throw new NotFoundException('Doctor hours record not found for this doctor');
+      throw new NotFoundException(
+        'Doctor hours record not found for this doctor',
+      );
     }
 
     const startTime = updateDoctorHoursDto.start_time ?? existing.start_time;
@@ -107,8 +116,12 @@ export class DoctorHoursService {
         where: { id },
         data: {
           ...(updateDoctorHoursDto.day && { day: updateDoctorHoursDto.day }),
-          ...(updateDoctorHoursDto.start_time && { start_time: updateDoctorHoursDto.start_time }),
-          ...(updateDoctorHoursDto.end_time && { end_time: updateDoctorHoursDto.end_time }),
+          ...(updateDoctorHoursDto.start_time && {
+            start_time: updateDoctorHoursDto.start_time,
+          }),
+          ...(updateDoctorHoursDto.end_time && {
+            end_time: updateDoctorHoursDto.end_time,
+          }),
         },
       });
     } catch (error) {
@@ -132,7 +145,9 @@ export class DoctorHoursService {
     });
 
     if (!existing) {
-      throw new NotFoundException('Doctor hours record not found for this doctor');
+      throw new NotFoundException(
+        'Doctor hours record not found for this doctor',
+      );
     }
 
     await this.prismaService.db.doctor_hours.delete({

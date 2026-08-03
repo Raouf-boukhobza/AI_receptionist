@@ -15,7 +15,7 @@ export class SignupDto {
 
   @IsString()
   @IsNotEmpty()
-  @Length(8, 20 , { message: 'Password must be between 8 and 20 characters' })
+  @Length(8, 20, { message: 'Password must be between 8 and 20 characters' })
   password: string;
 
   @IsNotEmpty()
@@ -29,7 +29,6 @@ export class SignupDto {
   @IsNotEmpty()
   @IsPhoneNumber()
   personal_phone: string;
-
 
   @IsOptional()
   @IsString()

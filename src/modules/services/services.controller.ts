@@ -1,4 +1,10 @@
-import { Body, Controller, Post, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { ServicesService } from './services.service';
 import { CreateServiceDto } from './dtos/create-service.dto';
 import { JwtAuthGuard } from '../tenantModule/guards/jwt.guard';

@@ -8,4 +8,4 @@ import { PrismaService } from './prisma/prisma.service';
   providers: [TenantContextInterceptor, PrismaService],
   exports: [TenantContextInterceptor, PrismaService],
 })
-export class CommonModule {}
+export class CommonModule { }

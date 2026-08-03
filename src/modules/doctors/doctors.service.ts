@@ -5,7 +5,7 @@ import { Prisma } from 'generated/prisma/client';
 
 @Injectable()
 export class DoctorsService {
-  constructor(private readonly prismaService: PrismaService) { }
+  constructor(private readonly prismaService: PrismaService) {}
 
   async createDoctor(tenantId: string, createDoctorDto: CreateDoctorDto) {
     const { name, service_ids } = createDoctorDto;
@@ -36,13 +36,13 @@ export class DoctorsService {
           name,
           ...(uniqueServiceIds.length > 0
             ? {
-              doctor_services: {
-                create: uniqueServiceIds.map((serviceId) => ({
-                  tenant_id: tenantId,
-                  service_id: serviceId,
-                })),
-              },
-            }
+                doctor_services: {
+                  create: uniqueServiceIds.map((serviceId) => ({
+                    tenant_id: tenantId,
+                    service_id: serviceId,
+                  })),
+                },
+              }
             : {}),
         },
         include: {
