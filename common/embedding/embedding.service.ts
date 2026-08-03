@@ -1,12 +1,12 @@
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenAI } from '@google/genai';
+import { ContentEmbedding, GoogleGenAI } from '@google/genai';
 
 @Injectable()
 export class EmbeddingService {
   private readonly logger = new Logger(EmbeddingService.name);
   private readonly apiKey: string;
-  private readonly model = 'text-embedding-004';
+  private readonly model = 'gemini-embedding-001';
   private readonly ai: GoogleGenAI;
 
   constructor(private readonly configService: ConfigService) {
@@ -17,7 +17,7 @@ export class EmbeddingService {
   }
 
   
-  async embed(text: string): Promise<number[]> {
+  async embed(text: string): Promise<() => ArrayIterator<ContentEmbedding>> {
     if (!this.apiKey || !this.ai) {
       this.logger.error('GEMINI_API_KEY is not set in environment variables');
       throw new InternalServerErrorException(
@@ -34,14 +34,15 @@ export class EmbeddingService {
       const response = await this.ai.models.embedContent({
         model: this.model,
         contents: trimmedText,
+        config: { outputDimensionality: 1536 },
       });
 
-      if (!response.embedding?.values) {
+      if (!response.embeddings?.values) {
         this.logger.error(`Unexpected response structure from @google/genai embedContent: ${JSON.stringify(response)}`);
         throw new InternalServerErrorException('Invalid response structure returned from Google GenAI SDK');
       }
 
-      return response.embedding.values;
+      return response.embeddings.values;
     } catch (error: any) {
       if (error instanceof InternalServerErrorException) {
         throw error;
@@ -72,6 +73,7 @@ export class EmbeddingService {
       const response = await this.ai.models.embedContent({
         model: this.model,
         contents: trimmed,
+        config: { outputDimensionality: 1536 },
       });
 
       if (!response.embeddings || response.embeddings.length !== trimmed.length) {
