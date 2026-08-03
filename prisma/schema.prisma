@@ -27,8 +27,10 @@ model tenants {
   refresh_token            String?           @db.VarChar(255)
   bookings                 bookings[]
   conversations            conversations[]
+  doctor_hours             doctor_hours[]
   doctor_services          doctor_services[]
   doctors                  doctors[]
+  faqs                     faqs[]
   knowledge_base           knowledge_base[]
   messages                 messages[]
   notifications            notifications[]
@@ -59,6 +61,7 @@ model doctors {
   created_at      DateTime          @default(now()) @db.Timestamptz(6)
   updated_at      DateTime          @default(now()) @db.Timestamptz(6)
   bookings        bookings[]
+  doctor_hours    doctor_hours[]
   doctor_services doctor_services[]
   tenants         tenants           @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -163,6 +166,35 @@ model knowledge_base {
   @@index([tenant_id], map: "idx_knowledge_base_tenants")
 }
 
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model doctor_hours {
+  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id  String      @db.Uuid
+  doctor_id  String      @db.Uuid
+  day        day_of_week
+  start_time String      @db.VarChar(5)
+  end_time   String      @db.VarChar(5)
+  created_at DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at DateTime    @default(now()) @db.Timestamptz(6)
+  doctors    doctors     @relation(fields: [doctor_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants    tenants     @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([doctor_id, day])
+  @@index([doctor_id], map: "idx_doctor_hours_doctor")
+  @@index([tenant_id], map: "idx_doctor_hours_tenants")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model faqs {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id  String   @db.Uuid
+  question   String
+  answer     String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  tenants    tenants  @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
 enum tenant_status {
   active
   incomplete
@@ -192,4 +224,14 @@ enum notification_type {
   booking_created
   subscription_expiring
   payment_failed
+}
+
+enum day_of_week {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
 }

@@ -6,15 +6,12 @@ import { RefreshTokenDto } from './dtos/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt.guard';
 import { TenantId } from '../../../common/tenant-context/tenant-id.decorator';
 
-
 @Controller({
   path: 'auth',
   version: '1',
 })
 export class AuthController {
-  constructor(
-    private readonly tenantService: TenantService,
-  ) {}
+  constructor(private readonly tenantService: TenantService) {}
   @Post('signup')
   async signup(@Body() signupDto: SignupDto) {
     return this.tenantService.signup(signupDto);
@@ -35,5 +32,4 @@ export class AuthController {
   getProfile(@Req() req, @TenantId() tenant_id: string) {
     return { ...req.user, tenant_id };
   }
-
 }

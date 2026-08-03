@@ -5,26 +5,26 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ServicesService } from './services.service';
-import { CreateServiceDto } from './dtos/create-service.dto';
+import { DoctorsService } from './doctors.service';
+import { CreateDoctorDto } from './dtos/create-doctor.dto';
 import { JwtAuthGuard } from '../tenantModule/guards/jwt.guard';
 import { TenantContextInterceptor } from '../../../common/tenant-context/tenant-context.interceptor';
 import { TenantId } from '../../../common/tenant-context/tenant-id.decorator';
 
 @Controller({
-  path: 'services',
+  path: 'doctors',
   version: '1',
 })
 @UseGuards(JwtAuthGuard)
 @UseInterceptors(TenantContextInterceptor)
-export class ServicesController {
-  constructor(private readonly servicesService: ServicesService) {}
+export class DoctorsController {
+  constructor(private readonly doctorsService: DoctorsService) {}
 
   @Post()
-  async addService(
+  async createDoctor(
     @TenantId() tenantId: string,
-    @Body() createServiceDto: CreateServiceDto,
+    @Body() createDoctorDto: CreateDoctorDto,
   ) {
-    return this.servicesService.createService(tenantId, createServiceDto);
+    return this.doctorsService.createDoctor(tenantId, createDoctorDto);
   }
 }
