@@ -21,5 +21,6 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   ],
   controllers: [TenantController, AuthController],
   providers: [TenantService, JwtStrategy],
+  exports: [TenantService],
 })
 export class TenantModule {}
