@@ -17,4 +17,9 @@ export class KnowledgeBaseController {
   async createKnowledgeBase(@TenantId() tenantId: string) {
     return this.knowledgeBaseService.syncTenantKnowledgeBase(tenantId);
   }
+
+  @Post('test')
+  async testKnowledgeBase(@TenantId() tenantId: string) {
+    return this.knowledgeBaseService.verifyAndRecordKnowledgeBase(tenantId);
+  }
 }

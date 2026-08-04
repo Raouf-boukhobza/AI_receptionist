@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { EmbeddingService } from '../../../common/embedding/embedding.service';
-
+import { doctors, faqs, Prisma, services } from 'generated/prisma/client';
+import { LlmService } from '../../../common/llm/llm.service';
+import { TenantService } from '../tenantModule/tenant.service';
 
 export interface KnowledgeChunk {
   /** Category the chunk belongs to (service | faq | doctor_hours). */
@@ -11,6 +13,10 @@ export interface KnowledgeChunk {
   /** Human-readable text that will be embedded. */
   content: string;
 }
+type TenantData = Awaited<ReturnType<KnowledgeBaseService['fetchTenantData']>>;
+type Service = TenantData['services'][number];
+type Faq = TenantData['faqs'][number];
+type Doctor = TenantData['doctors'][number];
 
 @Injectable()
 export class KnowledgeBaseService {
@@ -19,6 +25,7 @@ export class KnowledgeBaseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly embeddingService: EmbeddingService,
+    private readonly tenantService: TenantService,
   ) {}
 
   /**
@@ -80,6 +87,15 @@ export class KnowledgeBaseService {
     );
   }
 
+  // verify knowledge base content
+  async verifyAndRecordKnowledgeBase(tenantId: string) {
+    const testResult = await this.testKnowledgeBaseContent(tenantId);
+    if (testResult.allPassed) {
+      await this.tenantService.updateKnowledgeBasePassedAt(tenantId);
+    }
+    return testResult;
+  }
+
   // ─── Private: Data Fetching ────────────────────────────────────────
 
   private async fetchTenantData(tenantId: string) {
@@ -107,8 +123,6 @@ export class KnowledgeBaseService {
 
     return { services, faqs, doctors };
   }
-
-  // ─── Private: Chunking ─────────────────────────────────────────────
 
   /**
    * Transform raw tenant data into self-contained text chunks.
@@ -179,5 +193,71 @@ export class KnowledgeBaseService {
     }
 
     return chunks;
+  }
+
+  private async testKnowledgeBaseContent(tenantId: string) {
+    const data = await this.fetchTenantData(tenantId);
+
+    if (data.services.length === 0 || data.faqs.length === 0 || data.doctors.length === 0) {
+      throw new BadRequestException('Cannot run test: tenant must have at least one service, doctor, and FAQ');
+    }
+
+    const service : Service = data.services[0];
+    const faq : Faq = data.faqs[0];
+    const doctor : Doctor = data.doctors[0];
+
+    const testQuestions = this.buildTestQuestions(service, faq, doctor);
+    const testVectors = await this.embeddingService.embedBatch(testQuestions);
+
+    const results : any[] = [];
+
+    for (let i = 0; i < testQuestions.length; i++) {
+      const question = testQuestions[i];
+      const vector = testVectors[i];
+
+      const topChunk = await this.searchTopChunk(tenantId, vector);
+
+      if (!topChunk || topChunk.distance > 0.5) {
+        results.push({ question, passed: false });
+        continue;
+      }
+      results.push({ question, passed: true , topChunkDistance : topChunk.distance});
+    }
+
+    const allPassed = results.every((r) => r.passed);
+    return { allPassed, results };
+  }
+
+
+
+
+  //build the questions with the service, faq, and doctor info
+  private buildTestQuestions(
+    service: Service,
+    faq: Faq,
+    doctor: Doctor,
+  ): string[] {
+    return [
+      `What is the price of ${service.name}?`,
+      `How long is the duration of ${service.name}?`,
+      `What are the available hours of ${doctor.name}?`,
+      `${faq.question}?`,
+    ];
+  }
+
+  //query the db for top chunk
+  private async searchTopChunk(tenantId: string, vector: number[]) : Promise<{content : string , distance : number}> {
+    const vectorStr = '[' + vector.join(',') + ']';
+
+    const rows = await this.prisma.db.$queryRaw<
+      { content: string; distance: number }[]
+    >`
+    SELECT content, embedding <=> ${vectorStr}::vector AS distance
+    FROM "knowledge_base"
+    WHERE tenant_id = ${tenantId}::uuid
+    ORDER BY embedding <=> ${vectorStr}::vector
+    LIMIT 1
+  `;
+    return rows[0];
   }
 }
