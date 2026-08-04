@@ -162,4 +162,11 @@ export class TenantService {
       '30m',
     );
   }
+
+  async updateKnowledgeBasePassedAt(tenantId: string) {
+    return this.prismaService.db.tenants.update({
+      where: { id: tenantId },
+      data: { knowledge_base_passed_at: new Date() },
+    });
+  }
 }
