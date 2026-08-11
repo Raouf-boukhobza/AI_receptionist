@@ -17,7 +17,7 @@ export class EmbeddingService {
   }
 
   
-  async embed(text: string): Promise<() => ArrayIterator<ContentEmbedding>> {
+  async embed(text: string): Promise<Number[]> {
     if (!this.apiKey || !this.ai) {
       this.logger.error('GEMINI_API_KEY is not set in environment variables');
       throw new InternalServerErrorException(
@@ -42,7 +42,7 @@ export class EmbeddingService {
         throw new InternalServerErrorException('Invalid response structure returned from Google GenAI SDK');
       }
 
-      return response.embeddings.values;
+      return response.embeddings?.[0].values || [];
     } catch (error: any) {
       if (error instanceof InternalServerErrorException) {
         throw error;
