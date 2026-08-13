@@ -246,7 +246,7 @@ export class KnowledgeBaseService {
   }
 
   //query the db for top chunk
-  private async searchTopChunk(tenantId: string, vector: number[]) : Promise<{content : string , distance : number}> {
+  public async searchTopChunk(tenantId: string, vector: number[]) : Promise<{content : string , distance : number}> {
     const vectorStr = '[' + vector.join(',') + ']';
 
     const rows = await this.prisma.db.$queryRaw<

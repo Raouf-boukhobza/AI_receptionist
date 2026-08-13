@@ -7,6 +7,4 @@ export const AgentState = Annotation.Root({
     reducer: messagesStateReducer,
     default: () => [],
   }),
-  tenantId: Annotation<string>(),
-  conversationId: Annotation<string>(),
 });

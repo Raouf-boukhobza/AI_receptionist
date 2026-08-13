@@ -142,7 +142,7 @@ export class TenantService {
     const tenant = await this.prismaService.db.tenants.findUnique({
       where: { id: payload.sub },
     });
-    if (!tenant) {
+    if (!tenant || !tenant.refresh_token) {
       throw new UnauthorizedException('Invalid refresh token');
     }
     const refreshMatches = await bcrypt.compare(
