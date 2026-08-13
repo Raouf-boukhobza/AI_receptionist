@@ -17,7 +17,7 @@ export class EmbeddingService {
   }
 
   
-  async embed(text: string): Promise<Number[]> {
+  async embed(text: string): Promise<number[]> {
     if (!this.apiKey || !this.ai) {
       this.logger.error('GEMINI_API_KEY is not set in environment variables');
       throw new InternalServerErrorException(

@@ -8,6 +8,7 @@ import { DoctorsModule } from './modules/doctors/doctors.module';
 import { FaqsModule } from './modules/faqs/faqs.module';
 import { KnowledgeBaseModule } from './modules/knowledge-base/knowledge-base.module';
 import { ConfigModule } from '@nestjs/config';
+import {AgentModule} from "./modules/agent/agent.module";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ConfigModule } from '@nestjs/config';
     DoctorsModule,
     FaqsModule,
     KnowledgeBaseModule,
+    AgentModule
   ],
   controllers: [AppController],
   providers: [AppService],

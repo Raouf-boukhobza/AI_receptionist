@@ -4,11 +4,19 @@ import { AgentState } from '../agent-state';
 import { createAgentNode } from './agent.node';
 import { ChatGoogle } from '@langchain/google';
 import { ConfigService } from '@nestjs/config';
+import { createSearchKnowledgeTool } from '../tools/search-knowledge.tool';
+import { EmbeddingService } from '../../../../../common/embedding/embedding.service';
+import { KnowledgeBaseService } from '../../../knowledge-base/knowledge-base.service';
+import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
 
 @Injectable()
 export class AgentGraphBuilder {
   private readonly model: ChatGoogle;
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly knowledgeBaseService: KnowledgeBaseService,
+    private readonly embeddingService: EmbeddingService,
+  ) {
     this.model = new ChatGoogle({
       model: 'gemini-3.6-flash',
       apiKey: this.configService.get<string>('GEMINI_API_KEY'),
@@ -16,11 +24,22 @@ export class AgentGraphBuilder {
   }
 
   buildGraph() {
+    const searchKnowledgeTool = createSearchKnowledgeTool(
+      this.knowledgeBaseService,
+      this.embeddingService,
+    );
+    const tools = [searchKnowledgeTool];
+    const modelWithTools = this.model.bindTools(tools);
+
     const graph = new StateGraph(AgentState);
     graph
-      .addNode('agent', createAgentNode(this.model))
+      .addNode('agent', createAgentNode(modelWithTools))
+      .addNode('tools', new ToolNode(tools))
       .addEdge(START, 'agent')
-      .addEdge('agent', END);
+      .addConditionalEdges('agent', toolsCondition)
+      .addEdge('tools', 'agent');
+
     return graph.compile();
   }
 }
+
