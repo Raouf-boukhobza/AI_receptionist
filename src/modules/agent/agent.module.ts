@@ -5,12 +5,14 @@ import { AgentController } from './agent.controller';
 import { KnowledgeBaseService } from '../knowledge-base/knowledge-base.service';
 import { KnowledgeBaseModule } from '../knowledge-base/knowledge-base.module';
 import { EmbeddingModule } from '../../../common/embedding/embedding.module';
+import { ConversationsModule } from '../conversations/conversations.module';
 
 
 @Module({
   imports: [
     KnowledgeBaseModule,
-    EmbeddingModule
+    EmbeddingModule,
+    ConversationsModule
   ],
   controllers: [AgentController],
   providers: [AgentService , AgentGraphBuilder],
