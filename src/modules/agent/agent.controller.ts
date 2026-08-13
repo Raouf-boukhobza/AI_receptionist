@@ -17,11 +17,12 @@ export class AgentController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(TenantContextInterceptor)
   async testMessage(
-    @Body() body: { tenantId: string; message: string },
+    @Body() body: { tenantId: string; message: string , conversationId: string },
   ) {
     const result = await this.agentService.getResponse(
       body.message,
       body.tenantId,
+      body.conversationId,
     );
     return result;
   }

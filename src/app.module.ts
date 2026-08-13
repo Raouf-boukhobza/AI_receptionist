@@ -7,6 +7,7 @@ import { ServicesModule } from './modules/services/services.module';
 import { DoctorsModule } from './modules/doctors/doctors.module';
 import { FaqsModule } from './modules/faqs/faqs.module';
 import { KnowledgeBaseModule } from './modules/knowledge-base/knowledge-base.module';
+import { ConversationsModule } from './modules/conversations/conversations.module';
 import { ConfigModule } from '@nestjs/config';
 import {AgentModule} from "./modules/agent/agent.module";
 
@@ -19,6 +20,7 @@ import {AgentModule} from "./modules/agent/agent.module";
     DoctorsModule,
     FaqsModule,
     KnowledgeBaseModule,
+    ConversationsModule,
     AgentModule
   ],
   controllers: [AppController],
