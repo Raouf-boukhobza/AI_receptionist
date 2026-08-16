@@ -24,6 +24,7 @@
     "@langchain/core": "^1.2.5",
     "@langchain/google": "^0.2.1",
     "@langchain/langgraph": "^1.4.9",
+    "@nestjs/bullmq": "^11.0.5",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",

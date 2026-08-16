@@ -28,5 +28,4 @@ export function toLangChainMessage(message: messages) : BaseMessage {
         default:
             throw new Error(`Unsupported message sender: ${message.sender}`);
     }
-
 }
