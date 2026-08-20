@@ -1,6 +1,8 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { SignupDto } from './dtos/signup.dto';
@@ -12,13 +14,18 @@ import { LoginDto } from './dtos/login.dto';
 import { RefreshTokenDto } from './dtos/refresh-token.dto';
 import { ConfigService } from '@nestjs/config';
 import type { StringValue } from 'ms';
+import Redis from 'ioredis';
+import { REDIS_CLIENT } from '../../../common/redis/redis.provider';
 
 @Injectable()
 export class TenantService {
+  private readonly logger = new Logger(TenantService.name);
+
   constructor(
     private readonly prismaService: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   private get refreshSecret() {
@@ -169,4 +176,43 @@ export class TenantService {
       data: { knowledge_base_passed_at: new Date() },
     });
   }
+
+  async getTenantIdByPhoneNumberId(phoneNumberId: string): Promise<string | null> {
+    if (!phoneNumberId) {
+      return null;
+    }
+
+    const cacheKey = `tenant:phone_number_id:${phoneNumberId}`;
+
+    try {
+      const cachedTenantId = await this.redis.get(cacheKey);
+      if (cachedTenantId) {
+        return cachedTenantId;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to retrieve tenant ID from Redis cache for key ${cacheKey}: ${(error as Error).message}`,
+      );
+    }
+
+    const tenant = await this.prismaService.db.tenants.findUnique({
+      where: { phone_number_id: phoneNumberId },
+      select: { id: true },
+    });
+
+    if (!tenant) {
+      return null;
+    }
+
+    try {
+      await this.redis.set(cacheKey, tenant.id, 'EX', 86400); // Cache for 24 hours
+    } catch (error) {
+      this.logger.warn(
+        `Failed to cache tenant ID in Redis for key ${cacheKey}: ${(error as Error).message}`,
+      );
+    }
+
+    return tenant.id;
+  }
+
 }

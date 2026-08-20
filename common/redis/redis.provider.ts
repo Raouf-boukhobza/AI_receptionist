@@ -16,7 +16,7 @@ export const redisProvider : Provider = {
       host,
       port: Number(port),
       password: password && password.trim() !== '' ? password : undefined,
-      maxRetriesPerRequest: null,
+      maxRetriesPerRequest: 3,
       enableReadyCheck: true,
     });
 
