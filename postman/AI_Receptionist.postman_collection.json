@@ -34,6 +34,11 @@
 			"key": "faqId",
 			"value": "",
 			"type": "string"
+		},
+		{
+			"key": "phoneNumberId",
+			"value": "100012345678901",
+			"type": "string"
 		}
 	],
 	"auth": {
@@ -544,6 +549,43 @@
 							"path": ["api", "v1", "faqs", "{{faqId}}"]
 						},
 						"description": "DELETE /api/v1/faqs/:id\n\nDeletes an FAQ by ID.\n\nRequires: Bearer {{accessToken}}\nGuards: JwtAuthGuard\nInterceptors: TenantContextInterceptor"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Messages",
+			"description": "Inbound and outbound WhatsApp messaging endpoints.\n\nThe handleMessage endpoint simulates incoming WhatsApp Cloud API Webhook events.",
+			"item": [
+				{
+					"name": "Handle Inbound WhatsApp Message",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"object\": \"whatsapp_business_account\",\n  \"entry\": [\n    {\n      \"id\": \"109283746501928\",\n      \"changes\": [\n        {\n          \"field\": \"messages\",\n          \"value\": {\n            \"messaging_product\": \"whatsapp\",\n            \"metadata\": {\n              \"display_phone_number\": \"+213555000001\",\n              \"phone_number_id\": \"{{phoneNumberId}}\"\n            },\n            \"contacts\": [\n              {\n                \"profile\": {\n                  \"name\": \"Karim Bouzid\"\n                },\n                \"wa_id\": \"213555123456\"\n              }\n            ],\n            \"messages\": [\n              {\n                \"from\": \"213555123456\",\n                \"id\": \"wamid.HBgL{{$timestamp}}{{$randomInt}}\",\n                \"timestamp\": \"{{$timestamp}}\",\n                \"type\": \"text\",\n                \"text\": {\n                  \"body\": \"Hello, I would like to book an appointment with Dr. Ahmed for dental cleaning please\"\n                }\n              }\n            ]\n          }\n        }\n      ]\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/messages",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "messages"]
+						},
+						"description": "POST /api/v1/messages\n\nSimulates a WhatsApp Cloud API inbound webhook event containing a new client message.\n\nPayload matches WhatsappWebhookDto:\n- Uses dynamic variables ({{$timestamp}}, {{$randomInt}}) so Postman generates a unique message ID (wamid) on every click.\n- Uses {{phoneNumberId}} in metadata to resolve the tenant from Redis / DB.\n- No Bearer Auth required (Meta Webhook is public)."
 					},
 					"response": []
 				}

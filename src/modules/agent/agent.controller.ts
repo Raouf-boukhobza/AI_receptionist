@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   Post,
   UseGuards,
   UseInterceptors,
@@ -8,22 +10,18 @@ import {
 import { AgentService } from './agent.service';
 import { TenantContextInterceptor } from '../../../common/tenant-context/tenant-context.interceptor';
 import { JwtAuthGuard } from '../tenantModule/guards/jwt.guard';
+import { InboundMessagesQueue } from '../messaging/queue/inbound-messages.queue';
+import { TenantId } from '../../../common/tenant-context/tenant-id.decorator';
 
 @Controller()
 export class AgentController {
-  constructor(private readonly agentService: AgentService) {}
+  constructor(private readonly inboundMessagesQueue: InboundMessagesQueue) {}
 
   @Post('webhook-test')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(TenantContextInterceptor)
-  async testMessage(
-    @Body() body: { tenantId: string; message: string , conversationId: string },
-  ) {
-    const result = await this.agentService.getResponse(
-      body.message,
-      body.tenantId,
-      body.conversationId,
-    );
-    return result;
+  @HttpCode(HttpStatus.ACCEPTED)
+  async testMessage() {
+
   }
 }

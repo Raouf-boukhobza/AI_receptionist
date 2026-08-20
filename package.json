@@ -20,6 +20,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@bull-board/api": "^9.3.2",
+    "@bull-board/express": "^9.3.2",
+    "@bull-board/nestjs": "^9.3.2",
     "@google/genai": "^2.15.0",
     "@langchain/core": "^1.2.5",
     "@langchain/google": "^0.2.1",
