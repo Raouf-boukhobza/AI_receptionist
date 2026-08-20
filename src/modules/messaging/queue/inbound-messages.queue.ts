@@ -15,8 +15,8 @@ export class InboundMessagesQueue {
         @InjectQueue(INBOUND_MESSAGES_QUEUE) private readonly queue: Queue<InboundMessagesJob>) {}
 
     async addJob(data: InboundMessagesJob) {
-        return this.queue.add('process-inbound-message',data , {
-          jobId : `inbound:${data.messageId}`
+        return this.queue.add('process-inbound-message', data, {
+          jobId: `inbound-${data.messageId}`,
         });
     }
 }

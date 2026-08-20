@@ -9,7 +9,8 @@ import { FaqsModule } from './modules/faqs/faqs.module';
 import { KnowledgeBaseModule } from './modules/knowledge-base/knowledge-base.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { ConfigModule } from '@nestjs/config';
-import {AgentModule} from "./modules/agent/agent.module";
+import { AgentModule } from './modules/agent/agent.module';
+import { MessagingModule } from './modules/messaging/messaging.module';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import {AgentModule} from "./modules/agent/agent.module";
     FaqsModule,
     KnowledgeBaseModule,
     ConversationsModule,
-    AgentModule
+    AgentModule,
+    MessagingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

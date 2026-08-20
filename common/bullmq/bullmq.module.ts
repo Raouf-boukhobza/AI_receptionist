@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { ExpressAdapter } from '@bull-board/express';
 
 @Module({
   imports: [
@@ -19,7 +21,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         };
       },
     }),
+    BullBoardModule.forRoot({
+      route: '/admin/queues',
+      adapter: ExpressAdapter,
+    }),
   ],
-  exports: [BullModule],
+  exports: [BullModule, BullBoardModule],
 })
 export class BullmqModule {}

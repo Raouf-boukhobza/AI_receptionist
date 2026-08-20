@@ -16,7 +16,7 @@ class TextDto {
     body: string;
 }
 
-class MessageDto {
+export class MessageDto {
     @IsString()
     from: string;
 
@@ -27,7 +27,7 @@ class MessageDto {
     timestamp: string;
 
     @IsString()
-    type: string; // 'text' | 'button' | 'image' | ... (v1 only handles 'text')
+    type: string; // 'text' | 'button' | 'image' |
 
     @IsOptional()
     @IsObject()
