@@ -15,7 +15,7 @@ import { TenantId } from '../../../common/tenant-context/tenant-id.decorator';
 
 @Controller()
 export class AgentController {
-  constructor(private readonly inboundMessagesQueue: InboundMessagesQueue) {}
+  constructor() {}
 
   @Post('webhook-test')
   @UseGuards(JwtAuthGuard)
