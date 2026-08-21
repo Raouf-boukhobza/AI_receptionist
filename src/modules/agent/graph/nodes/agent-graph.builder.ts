@@ -8,6 +8,7 @@ import { createSearchKnowledgeTool } from '../tools/search-knowledge.tool';
 import { EmbeddingService } from '../../../../../common/embedding/embedding.service';
 import { KnowledgeBaseService } from '../../../knowledge-base/knowledge-base.service';
 import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
+import { TenantTransaction } from '../../../../../common/tenant-context/tenant-transaction';
 
 @Injectable()
 export class AgentGraphBuilder {
@@ -16,6 +17,7 @@ export class AgentGraphBuilder {
     private readonly configService: ConfigService,
     private readonly knowledgeBaseService: KnowledgeBaseService,
     private readonly embeddingService: EmbeddingService,
+    private readonly tenantTransaction: TenantTransaction,
   ) {
     this.model = new ChatGoogle({
       model: 'gemini-3.6-flash',
@@ -27,6 +29,7 @@ export class AgentGraphBuilder {
     const searchKnowledgeTool = createSearchKnowledgeTool(
       this.knowledgeBaseService,
       this.embeddingService,
+      this.tenantTransaction,
     );
     const tools = [searchKnowledgeTool];
     const modelWithTools = this.model.bindTools(tools);

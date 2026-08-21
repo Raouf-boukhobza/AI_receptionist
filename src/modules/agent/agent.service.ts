@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { HumanMessage } from '@langchain/core/messages';
+import { AIMessage, BaseMessage } from '@langchain/core/messages';
 import { AgentGraphBuilder } from './graph/nodes/agent-graph.builder';
 import { ConversationsService } from '../conversations/conversations.service';
 import { toLangChainMessage } from './mappers/db-message.mapper';
@@ -14,17 +14,34 @@ export class AgentService {
     this.graph = this.agentGraphBuilder.buildGraph();
   }
 
-  async getResponse(input: string, tenantId: string , conversationId: string) {
-    const history  = await this.conversationService.fetchMessages(conversationId);
-    const messages = history.map(toLangChainMessage);
-    messages.push(new HumanMessage(input));
-    return this.graph.invoke(
+  async getResponse(
+    messages: BaseMessage[],
+    tenantId: string,
+    conversationId: string,
+  ): Promise<string> {
+    const result = await this.graph.invoke(
       {
         messages: messages,
       },
       {
-        configurable: { tenantId: tenantId  , conversationId: conversationId},
+        configurable: { tenantId: tenantId, conversationId: conversationId },
       },
     );
+
+    return this.extractAiReply(result.messages);
+  }
+
+  extractAiReply(messages: BaseMessage[]): string {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (
+        msg instanceof AIMessage &&
+        typeof msg.content === 'string' &&
+        msg.content.trim()
+      ) {
+        return msg.content.trim();
+      }
+    }
+    throw new Error('No AI reply found in messages');
   }
 }

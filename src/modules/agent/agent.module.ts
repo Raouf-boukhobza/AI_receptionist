@@ -14,7 +14,6 @@ import { MessagingModule } from '../messaging/messaging.module';
     KnowledgeBaseModule,
     EmbeddingModule,
     ConversationsModule,
-    forwardRef(() => MessagingModule)
   ],
   controllers: [AgentController],
   providers: [AgentService , AgentGraphBuilder],
