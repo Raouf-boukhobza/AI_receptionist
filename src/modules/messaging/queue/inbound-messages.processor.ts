@@ -24,6 +24,14 @@ export class InboundMessagesProcessor extends WorkerHost {
   async process(job: Job<InboundMessagesJob>) {
     const { tenantId, messageId } = job.data;
 
+    this.logger.log(`Processing inbound message ${messageId} for tenant ${tenantId}`);
+    await this.tenantTransaction.run(tenantId , async (tx) => {
+      await tx.messages.update({
+        where : {id : messageId},
+        data : {status : 'processing'}
+      })
+    })
+
     //case 1: reply to message already exist
     const state = await this.tenantTransaction.run(tenantId, async (tx) => {
       const inbound = await tx.messages.findFirstOrThrow({
