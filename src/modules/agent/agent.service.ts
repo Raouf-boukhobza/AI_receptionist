@@ -1,30 +1,31 @@
 import { Injectable } from '@nestjs/common';
-import { AIMessage, BaseMessage } from '@langchain/core/messages';
+import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { AgentGraphBuilder } from './graph/nodes/agent-graph.builder';
-import { ConversationsService } from '../conversations/conversations.service';
-import { toLangChainMessage } from './mappers/db-message.mapper';
 
 @Injectable()
 export class AgentService {
   private readonly graph;
-  constructor(
-    private readonly agentGraphBuilder: AgentGraphBuilder,
-    private readonly conversationService: ConversationsService,
-  ) {
+  constructor(private readonly agentGraphBuilder: AgentGraphBuilder) {
     this.graph = this.agentGraphBuilder.buildGraph();
   }
 
   async getResponse(
-    messages: BaseMessage[],
+    message: string,
     tenantId: string,
     conversationId: string,
+    phoneNumber?: string,
   ): Promise<string> {
     const result = await this.graph.invoke(
       {
-        messages: messages,
+        messages: [new HumanMessage(message)],
       },
       {
-        configurable: { tenantId: tenantId, conversationId: conversationId },
+        configurable: {
+          thread_id: conversationId,
+          tenantId: tenantId,
+          conversationId: conversationId,
+          phoneNumber: phoneNumber,
+        },
       },
     );
 

@@ -1,10 +1,15 @@
-import { Injectable } from '@nestjs/common';
-import { END, START, StateGraph } from '@langchain/langgraph';
+import { Inject, Injectable } from '@nestjs/common';
+import {
+  BaseCheckpointSaver,
+  START,
+  StateGraph,
+} from '@langchain/langgraph';
 import { AgentState } from '../agent-state';
 import { createAgentNode } from './agent.node';
 import { ChatGoogle } from '@langchain/google';
 import { ConfigService } from '@nestjs/config';
 import { createSearchKnowledgeTool } from '../tools/search-knowledge.tool';
+import { createBookingTool } from '../tools/booking.tool';
 import { EmbeddingService } from '../../../../../common/embedding/embedding.service';
 import { KnowledgeBaseService } from '../../../knowledge-base/knowledge-base.service';
 import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
@@ -18,6 +23,7 @@ export class AgentGraphBuilder {
     private readonly knowledgeBaseService: KnowledgeBaseService,
     private readonly embeddingService: EmbeddingService,
     private readonly tenantTransaction: TenantTransaction,
+    @Inject('CHECKPOINTER') private readonly checkpointer: BaseCheckpointSaver,
   ) {
     this.model = new ChatGoogle({
       model: 'gemini-3.6-flash',
@@ -31,7 +37,8 @@ export class AgentGraphBuilder {
       this.embeddingService,
       this.tenantTransaction,
     );
-    const tools = [searchKnowledgeTool];
+    const bookingTool = createBookingTool(this.tenantTransaction);
+    const tools = [searchKnowledgeTool, bookingTool];
     const modelWithTools = this.model.bindTools(tools);
 
     const graph = new StateGraph(AgentState);
@@ -42,7 +49,7 @@ export class AgentGraphBuilder {
       .addConditionalEdges('agent', toolsCondition)
       .addEdge('tools', 'agent');
 
-    return graph.compile();
+    return graph.compile({checkpointer : this.checkpointer});
   }
 }
 
