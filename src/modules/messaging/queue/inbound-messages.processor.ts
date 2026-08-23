@@ -15,7 +15,6 @@ export class InboundMessagesProcessor extends WorkerHost {
   constructor(
     private readonly agentService: AgentService,
     private readonly tenantTransaction: TenantTransaction,
-    private readonly conversationsService: ConversationsService,
     private readonly outboundQueue : OutboundMessagesQueue,
   ) {
     super();
@@ -24,10 +23,19 @@ export class InboundMessagesProcessor extends WorkerHost {
   async process(job: Job<InboundMessagesJob>) {
     const { tenantId, messageId } = job.data;
 
+    this.logger.log(`Processing inbound message ${messageId} for tenant ${tenantId}`);
+    await this.tenantTransaction.run(tenantId , async (tx) => {
+      await tx.messages.update({
+        where : {id : messageId},
+        data : {status : 'processing'}
+      })
+    })
+
     //case 1: reply to message already exist
     const state = await this.tenantTransaction.run(tenantId, async (tx) => {
       const inbound = await tx.messages.findFirstOrThrow({
         where: { id: messageId },
+        include: { conversations: true },
       });
       const existingReply = await tx.messages.findFirst({
         where: { reply_to_message_id: inbound.id },
@@ -43,18 +51,14 @@ export class InboundMessagesProcessor extends WorkerHost {
         messageId: state.existingReply.id,
       });
     }
-    const messages = await this.tenantTransaction.run(tenantId, async (tx) => {
-      return this.conversationsService.fetchMessages(
-        state.inbound.conversation_id,
-      );
-    });
-    const baseMessages = messages.map(toLangChainMessage);
+
 
     //case 2:reply doesn't exist
     const reply = await this.agentService.getResponse(
-      baseMessages,
+      state.inbound.content,
       tenantId,
       state.inbound.conversation_id,
+      state.inbound.conversations.client_phone,
     );
     this.logger.log(reply)
 

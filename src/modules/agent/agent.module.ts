@@ -7,16 +7,36 @@ import { KnowledgeBaseModule } from '../knowledge-base/knowledge-base.module';
 import { EmbeddingModule } from '../../../common/embedding/embedding.module';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { MessagingModule } from '../messaging/messaging.module';
-
+import { async } from 'rxjs';
+import { Pool } from 'pg';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 
 @Module({
-  imports: [
-    KnowledgeBaseModule,
-    EmbeddingModule,
-    ConversationsModule,
-  ],
+  imports: [KnowledgeBaseModule, EmbeddingModule, ConversationsModule],
   controllers: [AgentController],
-  providers: [AgentService , AgentGraphBuilder],
-  exports : [AgentService]
+  providers: [
+    AgentService,
+    AgentGraphBuilder,
+    {
+      inject : [ConfigService],
+      provide: 'CHECKPOINTER',
+      useFactory: async (configService: ConfigService) => {
+        const setupPool = new Pool({
+          connectionString: configService.get<string>('MIGRATE_DATABASE_URL'),
+        });
+        const setupCheckpointer = new PostgresSaver(setupPool);
+        await setupCheckpointer.setup();
+        await setupPool.end();
+        // 2. Runtime phase — app_user, used by the graph
+        const runtimePool = new Pool({
+          connectionString: process.env.DATABASE_URL,
+        });
+        const checkpointer = new PostgresSaver(runtimePool);
+        return checkpointer;
+      },
+    },
+  ],
+  exports: [AgentService, 'CHECKPOINTER'],
 })
 export class AgentModule {}
