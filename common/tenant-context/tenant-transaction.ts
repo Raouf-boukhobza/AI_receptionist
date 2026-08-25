@@ -8,8 +8,7 @@ export class TenantTransaction {
   constructor(private readonly prismaService: PrismaService) {}
 
   /**
-   * Runs `fn` inside a SHORT transaction with RLS bound to `tenantId`.
-   * Never wrap an LLM/HTTP call in here — keep it to milliseconds.
+   * Runs `fn` inside a SHORT transaction with RLS bound to `tenantId`
    */
   async run<T>(
     tenantId: string,

@@ -6,6 +6,7 @@ import { KnowledgeBaseService } from '../knowledge-base/knowledge-base.service';
 import { KnowledgeBaseModule } from '../knowledge-base/knowledge-base.module';
 import { EmbeddingModule } from '../../../common/embedding/embedding.module';
 import { ConversationsModule } from '../conversations/conversations.module';
+import { BookingModule } from '../booking/booking.module';
 import { MessagingModule } from '../messaging/messaging.module';
 import { async } from 'rxjs';
 import { Pool } from 'pg';
@@ -13,7 +14,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 
 @Module({
-  imports: [KnowledgeBaseModule, EmbeddingModule, ConversationsModule],
+  imports: [
+    KnowledgeBaseModule,
+    EmbeddingModule,
+    ConversationsModule,
+    BookingModule,
+  ],
   controllers: [AgentController],
   providers: [
     AgentService,

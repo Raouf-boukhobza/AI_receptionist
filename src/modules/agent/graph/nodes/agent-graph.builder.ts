@@ -12,6 +12,7 @@ import { createSearchKnowledgeTool } from '../tools/search-knowledge.tool';
 import { createBookingTool } from '../tools/booking.tool';
 import { EmbeddingService } from '../../../../../common/embedding/embedding.service';
 import { KnowledgeBaseService } from '../../../knowledge-base/knowledge-base.service';
+import { BookingService } from '../../../booking/booking.service';
 import { ToolNode, toolsCondition } from '@langchain/langgraph/prebuilt';
 import { TenantTransaction } from '../../../../../common/tenant-context/tenant-transaction';
 
@@ -22,6 +23,7 @@ export class AgentGraphBuilder {
     private readonly configService: ConfigService,
     private readonly knowledgeBaseService: KnowledgeBaseService,
     private readonly embeddingService: EmbeddingService,
+    private readonly bookingService: BookingService,
     private readonly tenantTransaction: TenantTransaction,
     @Inject('CHECKPOINTER') private readonly checkpointer: BaseCheckpointSaver,
   ) {
@@ -37,7 +39,10 @@ export class AgentGraphBuilder {
       this.embeddingService,
       this.tenantTransaction,
     );
-    const bookingTool = createBookingTool(this.tenantTransaction);
+    const bookingTool = createBookingTool(
+      this.bookingService,
+      this.tenantTransaction,
+    );
     const tools = [searchKnowledgeTool, bookingTool];
     const modelWithTools = this.model.bindTools(tools);
 
@@ -49,7 +54,6 @@ export class AgentGraphBuilder {
       .addConditionalEdges('agent', toolsCondition)
       .addEdge('tools', 'agent');
 
-    return graph.compile({checkpointer : this.checkpointer});
+    return graph.compile({ checkpointer: this.checkpointer });
   }
 }
-

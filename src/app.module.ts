@@ -11,6 +11,7 @@ import { ConversationsModule } from './modules/conversations/conversations.modul
 import { ConfigModule } from '@nestjs/config';
 import { AgentModule } from './modules/agent/agent.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
+import { BookingModule } from './modules/booking/booking.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { MessagingModule } from './modules/messaging/messaging.module';
     ConversationsModule,
     AgentModule,
     MessagingModule,
+    BookingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
