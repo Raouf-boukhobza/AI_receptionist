@@ -8,6 +8,7 @@ services:
     env_file:
       - .env
     environment:
+      - TZ=Africa/Algiers
       - NODE_ENV=${NODE_ENV}
       - PORT=${PORT}
       - MIGRATE_DATABASE_URL=postgresql://raouf:password@postgres:5432/ai_receptionist
