@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import {
   BookingRow,
@@ -12,6 +12,8 @@ import {
   hasConflict,
   findAvailableSlots,
 } from './utils/booking-slots.util';
+import { ReminderQueue } from './queue/reminder.queue';
+import { bookings, Prisma } from '../../../generated/prisma/client';
 
 export interface CreateBookingParams {
   tenantId: string;
@@ -49,7 +51,12 @@ export type BookingResult =
 
 @Injectable()
 export class BookingService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(BookingService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reminderQueue: ReminderQueue,
+  ) {}
 
   async createBooking(params: CreateBookingParams): Promise<BookingResult> {
     const { tenantId, clientPhone, serviceName, date, time, doctorName } =
@@ -152,30 +159,102 @@ export class BookingService {
     });
 
     // 7. Second: among working doctors, find one with no booking conflict
-    const availableDoctor = workingCandidates.find((c) => {
+    const availableDoctors = workingCandidates.filter((c) => {
       const doctorBookings = bookingsByDoctor.get(c.doctor_id) ?? [];
       return !hasConflict(doctorBookings, startTime, endTime);
     });
 
-    if (availableDoctor) {
-      const booking = await this.prisma.db.bookings.create({
-        data: {
-          tenant_id: tenantId,
-          doctor_id: availableDoctor.doctor_id,
-          service_id: serviceRow.id,
-          start_time: startTime,
-          end_time: endTime,
-          client_phone: clientPhone,
-        },
-      });
+    if (availableDoctors.length) {
+      let booking: bookings | null = null;
+      let bookedDoctor: (typeof availableDoctors)[number] | null = null;
 
-      return {
-        status: 'CONFIRMED',
-        bookingId: booking.id,
-        doctorName: availableDoctor.doctorName,
-        date: cleanDate,
-        time: cleanTime,
-      };
+      for (const doctor of availableDoctors) {
+        try {
+          booking = await this.prisma.db.bookings.create({
+            data: {
+              tenant_id: tenantId,
+              doctor_id: doctor.doctor_id,
+              service_id: serviceRow.id,
+              start_time: startTime,
+              end_time: endTime,
+              client_phone: clientPhone,
+            },
+          });
+
+          bookedDoctor = doctor;
+          break;
+        } catch (error) {
+          if (
+            (error instanceof Prisma.PrismaClientKnownRequestError &&
+              error.code === 'P2002') ||
+            (error as any).code === '23P01' ||
+            (error as any).meta?.driverAdapterError?.cause?.code === '23P01'
+          ) {
+            this.logger.warn(
+              `Doctor ${doctor.doctor_id} was booked concurrently.`,
+            );
+            continue;
+          }
+
+          throw error;
+        }
+      }
+
+      if (booking && bookedDoctor) {
+        const timeOneDayBefore = new Date(
+          startTime.getTime() - 24 * 60 * 60 * 1000,
+        );
+        const timeOneHourBefore = new Date(
+          startTime.getTime() - 60 * 60 * 1000,
+        );
+
+        try {
+          const now = Date.now();
+
+          let reminder_24h_job_id: string | undefined;
+          let reminder_1h_job_id: string | undefined;
+
+          if (timeOneDayBefore.getTime() > now) {
+            const job = await this.reminderQueue.addJob(
+              booking.id,
+              timeOneDayBefore,
+            );
+            reminder_24h_job_id = job?.id;
+          }
+
+          if (timeOneHourBefore.getTime() > now) {
+            const job = await this.reminderQueue.addJob(
+              booking.id,
+              timeOneHourBefore,
+            );
+            reminder_1h_job_id = job?.id;
+          }
+
+          if (reminder_24h_job_id || reminder_1h_job_id) {
+            await this.prisma.db.bookings.update({
+              where: { id: booking.id },
+              data: {
+                ...(reminder_24h_job_id ? { reminder_24h_job_id } : {}),
+                ...(reminder_1h_job_id ? { reminder_1h_job_id } : {}),
+              },
+            });
+          }
+        } catch (reminderError) {
+          this.logger.error(
+            `Failed to schedule reminders for booking ${booking.id}: ${
+              (reminderError as Error)?.message
+            }`,
+          );
+        }
+
+        return {
+          status: 'CONFIRMED',
+          bookingId: booking.id,
+          doctorName: bookedDoctor.doctorName,
+          date: cleanDate,
+          time: cleanTime,
+        };
+      }
     }
 
     // 8. Slot not available (outside working hours or conflict) -> generate valid alternatives
@@ -220,7 +299,6 @@ export class BookingService {
         }
       }
     }
-
     return {
       status: 'UNAVAILABLE',
       reason:
