@@ -140,7 +140,7 @@ export class BookingService {
       SELECT doctor_id, start_time, end_time
       FROM bookings
       WHERE doctor_id = ANY(${doctorIds}::uuid[])
-        AND start_time >= ${dayStart}
+        AND end_time >= ${dayStart}
         AND start_time < ${nextDayEnd}
         AND status != 'cancelled'::booking_status
     `;
