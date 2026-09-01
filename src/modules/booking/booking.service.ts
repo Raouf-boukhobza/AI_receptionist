@@ -14,6 +14,7 @@ import {
 } from './utils/booking-slots.util';
 import { ReminderQueue } from './queue/reminder.queue';
 import { bookings, Prisma } from '../../../generated/prisma/client';
+import { TenantTransaction } from '../../../common/tenant-context/tenant-transaction';
 
 export interface CreateBookingParams {
   tenantId: string;
@@ -56,6 +57,7 @@ export class BookingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly reminderQueue: ReminderQueue,
+    private readonly tenantTransaction: TenantTransaction,
   ) {}
 
   async createBooking(params: CreateBookingParams): Promise<BookingResult> {
@@ -201,52 +203,6 @@ export class BookingService {
       }
 
       if (booking && bookedDoctor) {
-        const timeOneDayBefore = new Date(
-          startTime.getTime() - 24 * 60 * 60 * 1000,
-        );
-        const timeOneHourBefore = new Date(
-          startTime.getTime() - 60 * 60 * 1000,
-        );
-
-        try {
-          const now = Date.now();
-
-          let reminder_24h_job_id: string | undefined;
-          let reminder_1h_job_id: string | undefined;
-
-          if (timeOneDayBefore.getTime() > now) {
-            const job = await this.reminderQueue.addJob(
-              booking.id,
-              timeOneDayBefore,
-            );
-            reminder_24h_job_id = job?.id;
-          }
-
-          if (timeOneHourBefore.getTime() > now) {
-            const job = await this.reminderQueue.addJob(
-              booking.id,
-              timeOneHourBefore,
-            );
-            reminder_1h_job_id = job?.id;
-          }
-
-          if (reminder_24h_job_id || reminder_1h_job_id) {
-            await this.prisma.db.bookings.update({
-              where: { id: booking.id },
-              data: {
-                ...(reminder_24h_job_id ? { reminder_24h_job_id } : {}),
-                ...(reminder_1h_job_id ? { reminder_1h_job_id } : {}),
-              },
-            });
-          }
-        } catch (reminderError) {
-          this.logger.error(
-            `Failed to schedule reminders for booking ${booking.id}: ${
-              (reminderError as Error)?.message
-            }`,
-          );
-        }
-
         return {
           status: 'CONFIRMED',
           bookingId: booking.id,
@@ -308,5 +264,51 @@ export class BookingService {
       time: cleanTime,
       nextDay: nextDayStr,
     };
+  }
+  async createReminders(tenantId: string , startTime: Date, bookingId: string ) {
+    const timeOneDayBefore = new Date(
+      startTime.getTime() - 24 * 60 * 60 * 1000,
+    );
+    const timeOneHourBefore = new Date(startTime.getTime() - 60 * 60 * 1000);
+    try {
+      const now = Date.now();
+
+      let reminder_24h_job_id: string | undefined;
+      let reminder_1h_job_id: string | undefined;
+
+      if (timeOneDayBefore.getTime() > now) {
+        const job = await this.reminderQueue.addJob(
+          bookingId,
+          timeOneDayBefore,
+        );
+        reminder_24h_job_id = job?.id;
+      }
+
+      if (timeOneHourBefore.getTime() > now) {
+        const job = await this.reminderQueue.addJob(
+          bookingId,
+          timeOneHourBefore,
+        );
+        reminder_1h_job_id = job?.id;
+      }
+
+      if (reminder_24h_job_id || reminder_1h_job_id) {
+        await this.tenantTransaction.run(tenantId, async (tx) => {
+          await tx.bookings.update({
+            where: { id: bookingId },
+            data: {
+              ...(reminder_24h_job_id ? { reminder_24h_job_id } : {}),
+              ...(reminder_1h_job_id ? { reminder_1h_job_id } : {}),
+            },
+          });
+        });
+      }
+    } catch (reminderError) {
+      this.logger.error(
+        `Failed to schedule reminders for booking ${bookingId}: ${
+          (reminderError as Error)?.message
+        }`,
+      );
+    }
   }
 }

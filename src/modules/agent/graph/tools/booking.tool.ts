@@ -37,6 +37,13 @@ export function createBookingTool(
           doctorName,
         });
       });
+      if (result.status === 'CONFIRMED') {
+        await bookingService.createReminders(
+            tenantId,
+            new Date(`${result.date}T${result.time}:00`),
+            result.bookingId
+        )
+      }
 
       switch (result.status) {
         case 'CONFIRMED':

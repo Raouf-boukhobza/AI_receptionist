@@ -2,9 +2,22 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BookingService } from '../booking.service';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { ReminderQueue } from '../queue/reminder.queue';
+import { TenantTransaction } from '../../../../common/tenant-context/tenant-transaction';
 
 describe('BookingService', () => {
   let service: BookingService;
+
+  const mockTx = {
+    bookings: {
+      update: jest.fn(),
+    },
+  };
+
+  const mockTenantTransaction = {
+    run: jest.fn(async (_tenantId: string, fn: (tx: any) => Promise<any>) =>
+      fn(mockTx),
+    ),
+  };
 
   const mockDb = {
     services: {
@@ -46,6 +59,10 @@ describe('BookingService', () => {
         {
           provide: ReminderQueue,
           useValue: mockReminderQueue,
+        },
+        {
+          provide: TenantTransaction,
+          useValue: mockTenantTransaction,
         },
       ],
     }).compile();
@@ -408,10 +425,7 @@ describe('BookingService', () => {
       }
     });
 
-    it('should schedule both 24h and 1h reminders when booking is more than 24h in the future', async () => {
-      jest.useFakeTimers();
-      jest.setSystemTime(new Date('2026-08-20T10:00:00.000Z'));
-
+    it('should create booking without scheduling reminders inline', async () => {
       mockDb.services.findFirst.mockResolvedValue(mockServiceRow);
       mockDb.doctor_services.findMany.mockResolvedValue([
         {
@@ -429,24 +443,40 @@ describe('BookingService', () => {
       ]);
       mockDb.$queryRaw.mockResolvedValue([]);
       mockDb.bookings.create.mockResolvedValue({
-        id: 'booking-far-future',
+        id: 'booking-direct',
         start_time: new Date('2026-08-25T10:00:00'),
-      });
-      mockReminderQueue.addJob
-        .mockResolvedValueOnce({ id: 'job-24h' })
-        .mockResolvedValueOnce({ id: 'job-1h' });
-      mockDb.bookings.update.mockResolvedValue({
-        id: 'booking-far-future',
-        reminder_24h_job_id: 'job-24h',
-        reminder_1h_job_id: 'job-1h',
       });
 
       const result = await service.createBooking(defaultParams);
 
       expect(result.status).toBe('CONFIRMED');
+      expect(mockReminderQueue.addJob).not.toHaveBeenCalled();
+      expect(mockDb.bookings.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createReminders', () => {
+    const tenantId = 'tenant-123';
+    const bookingId = 'booking-123';
+    const startTime = new Date('2026-08-25T10:00:00');
+
+    it('should schedule both 24h and 1h reminders when booking is more than 24h in the future', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-08-20T10:00:00.000Z'));
+
+      mockReminderQueue.addJob
+        .mockResolvedValueOnce({ id: 'job-24h' })
+        .mockResolvedValueOnce({ id: 'job-1h' });
+
+      await service.createReminders(tenantId, startTime, bookingId);
+
       expect(mockReminderQueue.addJob).toHaveBeenCalledTimes(2);
-      expect(mockDb.bookings.update).toHaveBeenCalledWith({
-        where: { id: 'booking-far-future' },
+      expect(mockTenantTransaction.run).toHaveBeenCalledWith(
+        tenantId,
+        expect.any(Function),
+      );
+      expect(mockTx.bookings.update).toHaveBeenCalledWith({
+        where: { id: bookingId },
         data: {
           reminder_24h_job_id: 'job-24h',
           reminder_1h_job_id: 'job-1h',
@@ -458,45 +488,19 @@ describe('BookingService', () => {
 
     it('should schedule only 1h reminder when booking is less than 24h away but more than 1h', async () => {
       jest.useFakeTimers();
-      // Booking is at 2026-08-25T10:00:00, set current time to 2026-08-25T07:00:00 (3 hours before)
       jest.setSystemTime(new Date('2026-08-25T07:00:00'));
 
-      mockDb.services.findFirst.mockResolvedValue(mockServiceRow);
-      mockDb.doctor_services.findMany.mockResolvedValue([
-        {
-          doctor_id: 'doc-1',
-          doctors: { name: 'Alice' },
-        },
-      ]);
-      mockDb.doctor_hours.findMany.mockResolvedValue([
-        {
-          doctor_id: 'doc-1',
-          day: 'TUESDAY',
-          start_time: '09:00',
-          end_time: '17:00',
-        },
-      ]);
-      mockDb.$queryRaw.mockResolvedValue([]);
-      mockDb.bookings.create.mockResolvedValue({
-        id: 'booking-near-future',
-        start_time: new Date('2026-08-25T10:00:00'),
-      });
       mockReminderQueue.addJob.mockResolvedValueOnce({ id: 'job-1h-only' });
-      mockDb.bookings.update.mockResolvedValue({
-        id: 'booking-near-future',
-        reminder_1h_job_id: 'job-1h-only',
-      });
 
-      const result = await service.createBooking(defaultParams);
+      await service.createReminders(tenantId, startTime, bookingId);
 
-      expect(result.status).toBe('CONFIRMED');
       expect(mockReminderQueue.addJob).toHaveBeenCalledTimes(1);
       expect(mockReminderQueue.addJob).toHaveBeenCalledWith(
-        'booking-near-future',
+        bookingId,
         new Date('2026-08-25T09:00:00'),
       );
-      expect(mockDb.bookings.update).toHaveBeenCalledWith({
-        where: { id: 'booking-near-future' },
+      expect(mockTx.bookings.update).toHaveBeenCalledWith({
+        where: { id: bookingId },
         data: {
           reminder_1h_job_id: 'job-1h-only',
         },
@@ -507,74 +511,27 @@ describe('BookingService', () => {
 
     it('should not schedule reminders when booking is in the past or less than 1h in future', async () => {
       jest.useFakeTimers();
-      // Booking is at 2026-08-25T10:00:00, set current time to 2026-08-25T09:30:00 (30 mins before)
       jest.setSystemTime(new Date('2026-08-25T09:30:00'));
 
-      mockDb.services.findFirst.mockResolvedValue(mockServiceRow);
-      mockDb.doctor_services.findMany.mockResolvedValue([
-        {
-          doctor_id: 'doc-1',
-          doctors: { name: 'Alice' },
-        },
-      ]);
-      mockDb.doctor_hours.findMany.mockResolvedValue([
-        {
-          doctor_id: 'doc-1',
-          day: 'TUESDAY',
-          start_time: '09:00',
-          end_time: '17:00',
-        },
-      ]);
-      mockDb.$queryRaw.mockResolvedValue([]);
-      mockDb.bookings.create.mockResolvedValue({
-        id: 'booking-immediate',
-        start_time: new Date('2026-08-25T10:00:00'),
-      });
+      await service.createReminders(tenantId, startTime, bookingId);
 
-      const result = await service.createBooking(defaultParams);
-
-      expect(result.status).toBe('CONFIRMED');
       expect(mockReminderQueue.addJob).not.toHaveBeenCalled();
-      expect(mockDb.bookings.update).not.toHaveBeenCalled();
+      expect(mockTx.bookings.update).not.toHaveBeenCalled();
 
       jest.useRealTimers();
     });
 
-    it('should confirm booking even if reminder queue throws an error', async () => {
+    it('should catch and log error if reminder queue throws an error without bubbling up', async () => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2026-08-20T10:00:00.000Z'));
 
-      mockDb.services.findFirst.mockResolvedValue(mockServiceRow);
-      mockDb.doctor_services.findMany.mockResolvedValue([
-        {
-          doctor_id: 'doc-1',
-          doctors: { name: 'Alice' },
-        },
-      ]);
-      mockDb.doctor_hours.findMany.mockResolvedValue([
-        {
-          doctor_id: 'doc-1',
-          day: 'TUESDAY',
-          start_time: '09:00',
-          end_time: '17:00',
-        },
-      ]);
-      mockDb.$queryRaw.mockResolvedValue([]);
-      mockDb.bookings.create.mockResolvedValue({
-        id: 'booking-queue-err',
-        start_time: new Date('2026-08-25T10:00:00'),
-      });
-      mockReminderQueue.addJob.mockRejectedValue(new Error('Redis connection down'));
+      mockReminderQueue.addJob.mockRejectedValue(
+        new Error('Redis connection down'),
+      );
 
-      const result = await service.createBooking(defaultParams);
-
-      expect(result).toEqual({
-        status: 'CONFIRMED',
-        bookingId: 'booking-queue-err',
-        doctorName: 'Alice',
-        date: '2026-08-25',
-        time: '10:00',
-      });
+      await expect(
+        service.createReminders(tenantId, startTime, bookingId),
+      ).resolves.not.toThrow();
 
       jest.useRealTimers();
     });

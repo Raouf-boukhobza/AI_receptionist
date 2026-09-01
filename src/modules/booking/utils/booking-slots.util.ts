@@ -64,8 +64,10 @@ export function isWithinWorkingHours(
   endTimeStr: string,
 ): boolean {
   if (!workingHours) return false;
+
   return (
     startTimeStr >= workingHours.start_time &&
+    endTimeStr >= workingHours.start_time &&
     endTimeStr <= workingHours.end_time
   );
 }
