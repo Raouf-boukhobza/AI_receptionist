@@ -83,6 +83,22 @@ export class BookingService {
     );
     const endTimeStr = formatTime(endTime);
 
+    // Resolve day of week for requested date and next day
+    const requestedDayOfWeek = getDayOfWeek(cleanDate);
+    const nextDayStr = getNextDayStr(cleanDate);
+    const nextDayOfWeek = getDayOfWeek(nextDayStr);
+
+    if (Number.isNaN(startTime.getTime()) || startTime.getTime() <= new Date().getTime()) {
+      return {
+        status: 'UNAVAILABLE',
+        reason: 'OUTSIDE_HOURS',
+        alternatives: [],
+        date: cleanDate,
+        time: cleanTime,
+        nextDay: nextDayStr,
+      };
+    }
+
     // 2. Find candidate doctors offering this service (or specific doctor)
     const doctorLinks = await this.prisma.db.doctor_services.findMany({
       where: {
@@ -112,11 +128,6 @@ export class BookingService {
       doctorName: dl.doctors.name,
     }));
     const doctorIds = candidates.map((c) => c.doctor_id);
-
-    // 3. Resolve day of week for requested date and next day
-    const requestedDayOfWeek = getDayOfWeek(cleanDate);
-    const nextDayStr = getNextDayStr(cleanDate);
-    const nextDayOfWeek = getDayOfWeek(nextDayStr);
 
     // 4. Fetch working hours for all candidate doctors on requested and next day
     const doctorHoursRows = await this.prisma.db.doctor_hours.findMany({

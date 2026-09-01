@@ -5,8 +5,14 @@ import { BookingService } from '../../../booking/booking.service';
 
 const bookingSchema = z.object({
   service: z.string().describe('The name of the service to book'),
-  date: z.string().describe('Date in YYYY-MM-DD format'),
-  time: z.string().describe('Time in HH:mm format'),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD')
+    .describe('Date in YYYY-MM-DD format'),
+  time: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be HH:mm')
+    .describe('Time in HH:mm format'),
   doctorName: z
     .string()
     .optional()
