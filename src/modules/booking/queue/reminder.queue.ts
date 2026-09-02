@@ -15,4 +15,15 @@ export class ReminderQueue {
       delay : date.getTime() - new Date().getTime()
     });
   }
+
+  async removeJob(jobId: string): Promise<void> {
+    try {
+      const job = await this.queue.getJob(jobId);
+      if (job) {
+        await job.remove();
+      }
+    } catch {
+      // Ignored if job doesn't exist or already removed
+    }
+  }
 }

@@ -79,3 +79,99 @@ export function createBookingTool(
     },
   );
 }
+
+const updateBookingSchema = z.object({
+  bookingId: z
+    .string()
+    .optional()
+    .describe('The ID of the booking to update, if specifically mentioned'),
+  service: z
+    .string()
+    .optional()
+    .describe('The new service name if changing the booked service'),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD')
+    .describe('New date in YYYY-MM-DD format'),
+  time: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be HH:mm')
+    .describe('New time in HH:mm format'),
+  doctorName: z
+    .string()
+    .optional()
+    .describe('Doctor name if the client asked for a specific doctor'),
+});
+
+export function createUpdateBookingTool(
+  bookingService: BookingService,
+  tenantTransaction: TenantTransaction,
+) {
+  return tool(
+    async ({ bookingId, service, date, time, doctorName }, config) => {
+      const tenantId = config.configurable?.tenantId;
+      const phoneNumber = config.configurable?.phoneNumber;
+      if (!tenantId || !phoneNumber) {
+        throw new Error(
+          'Tenant context or phone number missing from tool execution',
+        );
+      }
+
+      const result = await tenantTransaction.run(tenantId, async () => {
+        return bookingService.updateBooking({
+          tenantId,
+          clientPhone: phoneNumber,
+          bookingId,
+          serviceName: service,
+          date,
+          time,
+          doctorName,
+        });
+      });
+
+      if (result.status === 'UPDATED') {
+        if (result.oldReminder24hJobId) {
+          await bookingService.cancelReminder(result.oldReminder24hJobId);
+        }
+        if (result.oldReminder1hJobId) {
+          await bookingService.cancelReminder(result.oldReminder1hJobId);
+        }
+        await bookingService.createReminders(
+          tenantId,
+          new Date(`${result.date}T${result.time}:00`),
+          result.bookingId,
+        );
+      }
+
+      switch (result.status) {
+        case 'UPDATED':
+          return `Booking updated successfully with Dr. ${result.doctorName} for ${result.serviceName} on ${result.date} at ${result.time}. Booking id: ${result.bookingId}`;
+        case 'BOOKING_NOT_FOUND':
+        case 'SERVICE_NOT_FOUND':
+        case 'DOCTOR_NOT_AVAILABLE':
+          return result.message;
+        case 'UNAVAILABLE': {
+          const serviceLabel =
+            result.serviceName || service || 'the requested service';
+          if (result.alternatives.length === 0) {
+            return result.reason === 'OUTSIDE_HOURS'
+              ? `No working hours or availability found for "${serviceLabel}" on ${result.date} or ${result.nextDay}.`
+              : `No availability found for "${serviceLabel}" on ${result.date} or ${result.nextDay}.`;
+          }
+          const prefix =
+            result.reason === 'OUTSIDE_HOURS'
+              ? `The requested time (${result.time} on ${result.date}) is outside working hours.`
+              : `Requested slot (${result.time} on ${result.date}) is already booked.`;
+          return `${prefix} Available alternatives:\n${result.alternatives.join('\n')}`;
+        }
+      }
+    },
+    {
+      name: 'update_booking',
+      description:
+        'Update or reschedule an existing appointment to a new date, time, service, or doctor. Validates doctor working hours and conflicts, and suggests alternatives if requested slot is unavailable.',
+      schema: updateBookingSchema,
+    },
+  );
+}
+
