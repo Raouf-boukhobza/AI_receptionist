@@ -32,12 +32,14 @@ describe('BookingService', () => {
     bookings: {
       create: jest.fn(),
       update: jest.fn(),
+      findFirst: jest.fn(),
     },
     $queryRaw: jest.fn(),
   };
 
   const mockReminderQueue = {
     addJob: jest.fn().mockResolvedValue({ id: 'job-123' }),
+    removeJob: jest.fn().mockResolvedValue(undefined),
   };
 
   const mockPrismaService = {
@@ -48,6 +50,8 @@ describe('BookingService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -68,6 +72,10 @@ describe('BookingService', () => {
     }).compile();
 
     service = module.get<BookingService>(BookingService);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   describe('createBooking', () => {
@@ -534,6 +542,374 @@ describe('BookingService', () => {
       ).resolves.not.toThrow();
 
       jest.useRealTimers();
+    });
+  });
+
+  describe('cancelReminder', () => {
+    it('should call reminderQueue.removeJob when jobId is provided', async () => {
+      await service.cancelReminder('job-123');
+      expect(mockReminderQueue.removeJob).toHaveBeenCalledWith('job-123');
+    });
+
+    it('should do nothing when jobId is null or undefined', async () => {
+      await service.cancelReminder(null);
+      await service.cancelReminder(undefined);
+      expect(mockReminderQueue.removeJob).not.toHaveBeenCalled();
+    });
+
+    it('should catch and log error without throwing when removeJob fails', async () => {
+      mockReminderQueue.removeJob.mockRejectedValueOnce(
+        new Error('Redis error'),
+      );
+      await expect(service.cancelReminder('job-error')).resolves.not.toThrow();
+    });
+  });
+
+  describe('updateBooking', () => {
+    const defaultParams = {
+      tenantId: 'tenant-123',
+      clientPhone: '+1234567890',
+      date: '2026-08-26', // Wednesday
+      time: '11:00',
+    };
+
+    const mockExistingBooking = {
+      id: 'existing-booking-1',
+      tenant_id: 'tenant-123',
+      doctor_id: 'doc-1',
+      service_id: 'svc-1',
+      client_phone: '+1234567890',
+      start_time: new Date('2026-08-25T10:00:00'),
+      end_time: new Date('2026-08-25T10:30:00'),
+      status: 'confirmed',
+      reminder_24h_job_id: 'job-old-24h',
+      reminder_1h_job_id: 'job-old-1h',
+      services: {
+        id: 'svc-1',
+        name: 'Consultation',
+        duration_minutes: 30,
+      },
+      doctors: {
+        id: 'doc-1',
+        name: 'Alice',
+      },
+    };
+
+    it('should return BOOKING_NOT_FOUND when no active booking exists for client', async () => {
+      mockDb.bookings.findFirst.mockResolvedValue(null);
+
+      const result = await service.updateBooking(defaultParams);
+
+      expect(mockDb.bookings.findFirst).toHaveBeenCalledWith({
+        where: {
+          client_phone: '+1234567890',
+          status: 'confirmed',
+          end_time: { gte: expect.any(Date) },
+        },
+        orderBy: {
+          start_time: 'asc',
+        },
+        include: {
+          services: true,
+          doctors: true,
+        },
+      });
+      expect(result).toEqual({
+        status: 'BOOKING_NOT_FOUND',
+        message: 'No active booking found to update.',
+      });
+    });
+
+    it('should return BOOKING_NOT_FOUND when specific bookingId is not found', async () => {
+      mockDb.bookings.findFirst.mockResolvedValue(null);
+
+      const result = await service.updateBooking({
+        ...defaultParams,
+        bookingId: 'non-existent-id',
+      });
+
+      expect(mockDb.bookings.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: 'non-existent-id',
+          client_phone: '+1234567890',
+          status: { not: 'cancelled' },
+        },
+        include: {
+          services: true,
+          doctors: true,
+        },
+      });
+      expect(result).toEqual({
+        status: 'BOOKING_NOT_FOUND',
+        message: 'No active booking found to update.',
+      });
+    });
+
+    it('should return SERVICE_NOT_FOUND when changing to a non-existent service', async () => {
+      mockDb.bookings.findFirst.mockResolvedValue(mockExistingBooking);
+      mockDb.services.findFirst.mockResolvedValue(null);
+
+      const result = await service.updateBooking({
+        ...defaultParams,
+        serviceName: 'Unknown Service',
+      });
+
+      expect(result).toEqual({
+        status: 'SERVICE_NOT_FOUND',
+        message: 'Service "Unknown Service" not found.',
+      });
+    });
+
+    it('should return DOCTOR_NOT_AVAILABLE when requested doctor does not offer service', async () => {
+      mockDb.bookings.findFirst.mockResolvedValue(mockExistingBooking);
+      mockDb.doctor_services.findMany.mockResolvedValue([]);
+
+      const result = await service.updateBooking({
+        ...defaultParams,
+        doctorName: 'Dr. House',
+      });
+
+      expect(result).toEqual({
+        status: 'DOCTOR_NOT_AVAILABLE',
+        message: 'Doctor "Dr. House" does not offer "Consultation".',
+      });
+    });
+
+    it('should update booking successfully on happy path (with automatic active booking lookup)', async () => {
+      mockDb.bookings.findFirst.mockResolvedValue(mockExistingBooking);
+      mockDb.doctor_services.findMany.mockResolvedValue([
+        {
+          doctor_id: 'doc-1',
+          doctors: { name: 'Alice' },
+        },
+      ]);
+      mockDb.doctor_hours.findMany.mockResolvedValue([
+        {
+          doctor_id: 'doc-1',
+          day: 'WEDNESDAY',
+          start_time: '09:00',
+          end_time: '17:00',
+        },
+        {
+          doctor_id: 'doc-1',
+          day: 'THURSDAY',
+          start_time: '09:00',
+          end_time: '17:00',
+        },
+      ]);
+      mockDb.$queryRaw.mockResolvedValue([]);
+      mockDb.bookings.update.mockResolvedValue({
+        ...mockExistingBooking,
+        start_time: new Date('2026-08-26T11:00:00'),
+        end_time: new Date('2026-08-26T11:30:00'),
+      });
+
+      const result = await service.updateBooking(defaultParams);
+
+      expect(result).toEqual({
+        status: 'UPDATED',
+        bookingId: 'existing-booking-1',
+        doctorName: 'Alice',
+        serviceName: 'Consultation',
+        date: '2026-08-26',
+        time: '11:00',
+        oldReminder24hJobId: 'job-old-24h',
+        oldReminder1hJobId: 'job-old-1h',
+      });
+      expect(mockDb.bookings.update).toHaveBeenCalledWith({
+        where: { id: 'existing-booking-1' },
+        data: {
+          doctor_id: 'doc-1',
+          service_id: 'svc-1',
+          start_time: new Date('2026-08-26T11:00:00'),
+          end_time: new Date('2026-08-26T11:30:00'),
+          status: 'confirmed',
+          updated_at: expect.any(Date),
+        },
+      });
+    });
+
+    it('should update booking with new service and new doctor', async () => {
+      const mockNewService = {
+        id: 'svc-2',
+        name: 'Teeth Cleaning',
+        duration_minutes: 45,
+      };
+      mockDb.bookings.findFirst.mockResolvedValue(mockExistingBooking);
+      mockDb.services.findFirst.mockResolvedValue(mockNewService);
+      mockDb.doctor_services.findMany.mockResolvedValue([
+        {
+          doctor_id: 'doc-2',
+          doctors: { name: 'Bob' },
+        },
+      ]);
+      mockDb.doctor_hours.findMany.mockResolvedValue([
+        {
+          doctor_id: 'doc-2',
+          day: 'WEDNESDAY',
+          start_time: '09:00',
+          end_time: '17:00',
+        },
+      ]);
+      mockDb.$queryRaw.mockResolvedValue([]);
+      mockDb.bookings.update.mockResolvedValue({
+        id: 'existing-booking-1',
+        doctor_id: 'doc-2',
+        service_id: 'svc-2',
+      });
+
+      const result = await service.updateBooking({
+        ...defaultParams,
+        bookingId: 'existing-booking-1',
+        serviceName: 'Teeth Cleaning',
+        doctorName: 'Bob',
+      });
+
+      expect(result).toEqual({
+        status: 'UPDATED',
+        bookingId: 'existing-booking-1',
+        doctorName: 'Bob',
+        serviceName: 'Teeth Cleaning',
+        date: '2026-08-26',
+        time: '11:00',
+        oldReminder24hJobId: 'job-old-24h',
+        oldReminder1hJobId: 'job-old-1h',
+      });
+      expect(mockDb.bookings.update).toHaveBeenCalledWith({
+        where: { id: 'existing-booking-1' },
+        data: {
+          doctor_id: 'doc-2',
+          service_id: 'svc-2',
+          start_time: new Date('2026-08-26T11:00:00'),
+          end_time: new Date('2026-08-26T11:45:00'),
+          status: 'confirmed',
+          updated_at: expect.any(Date),
+        },
+      });
+    });
+
+    it('should return UNAVAILABLE with OUTSIDE_HOURS and alternatives when outside doctor working hours', async () => {
+      mockDb.bookings.findFirst.mockResolvedValue(mockExistingBooking);
+      mockDb.doctor_services.findMany.mockResolvedValue([
+        {
+          doctor_id: 'doc-1',
+          doctors: { name: 'Alice' },
+        },
+      ]);
+      mockDb.doctor_hours.findMany.mockResolvedValue([
+        {
+          doctor_id: 'doc-1',
+          day: 'WEDNESDAY',
+          start_time: '09:00',
+          end_time: '12:00',
+        },
+      ]);
+      mockDb.$queryRaw.mockResolvedValue([]);
+
+      const result = await service.updateBooking({
+        ...defaultParams,
+        time: '15:00',
+      });
+
+      expect(result.status).toBe('UNAVAILABLE');
+      if (result.status === 'UNAVAILABLE') {
+        expect(result.reason).toBe('OUTSIDE_HOURS');
+        expect(result.date).toBe('2026-08-26');
+        expect(result.time).toBe('15:00');
+        expect(result.serviceName).toBe('Consultation');
+        expect(result.alternatives.length).toBeGreaterThan(0);
+      }
+      expect(mockDb.bookings.update).not.toHaveBeenCalled();
+    });
+
+    it('should return UNAVAILABLE with ALREADY_BOOKED and alternatives when slot has conflict', async () => {
+      mockDb.bookings.findFirst.mockResolvedValue(mockExistingBooking);
+      mockDb.doctor_services.findMany.mockResolvedValue([
+        {
+          doctor_id: 'doc-1',
+          doctors: { name: 'Alice' },
+        },
+      ]);
+      mockDb.doctor_hours.findMany.mockResolvedValue([
+        {
+          doctor_id: 'doc-1',
+          day: 'WEDNESDAY',
+          start_time: '09:00',
+          end_time: '17:00',
+        },
+      ]);
+      mockDb.$queryRaw.mockResolvedValue([
+        {
+          doctor_id: 'doc-1',
+          start_time: new Date('2026-08-26T11:00:00'),
+          end_time: new Date('2026-08-26T11:30:00'),
+        },
+      ]);
+
+      const result = await service.updateBooking(defaultParams);
+
+      expect(result.status).toBe('UNAVAILABLE');
+      if (result.status === 'UNAVAILABLE') {
+        expect(result.reason).toBe('ALREADY_BOOKED');
+        expect(result.date).toBe('2026-08-26');
+        expect(result.time).toBe('11:00');
+        expect(result.alternatives).toEqual([
+          'Dr. Alice: 09:00, 09:30, 10:00 (2026-08-26)',
+        ]);
+      }
+      expect(mockDb.bookings.update).not.toHaveBeenCalled();
+    });
+
+    it('should retry with next available doctor when DB update fails due to race condition', async () => {
+      mockDb.bookings.findFirst.mockResolvedValue(mockExistingBooking);
+      mockDb.doctor_services.findMany.mockResolvedValue([
+        {
+          doctor_id: 'doc-1',
+          doctors: { name: 'Alice' },
+        },
+        {
+          doctor_id: 'doc-2',
+          doctors: { name: 'Bob' },
+        },
+      ]);
+      mockDb.doctor_hours.findMany.mockResolvedValue([
+        {
+          doctor_id: 'doc-1',
+          day: 'WEDNESDAY',
+          start_time: '09:00',
+          end_time: '17:00',
+        },
+        {
+          doctor_id: 'doc-2',
+          day: 'WEDNESDAY',
+          start_time: '09:00',
+          end_time: '17:00',
+        },
+      ]);
+      mockDb.$queryRaw.mockResolvedValue([]);
+
+      const exclusionError = new Error('exclusion constraint conflict');
+      (exclusionError as any).code = '23P01';
+      mockDb.bookings.update
+        .mockRejectedValueOnce(exclusionError)
+        .mockResolvedValueOnce({
+          ...mockExistingBooking,
+          doctor_id: 'doc-2',
+        });
+
+      const result = await service.updateBooking(defaultParams);
+
+      expect(result).toEqual({
+        status: 'UPDATED',
+        bookingId: 'existing-booking-1',
+        doctorName: 'Bob',
+        serviceName: 'Consultation',
+        date: '2026-08-26',
+        time: '11:00',
+        oldReminder24hJobId: 'job-old-24h',
+        oldReminder1hJobId: 'job-old-1h',
+      });
+      expect(mockDb.bookings.update).toHaveBeenCalledTimes(2);
     });
   });
 });
