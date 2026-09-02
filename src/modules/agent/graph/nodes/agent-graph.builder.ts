@@ -9,7 +9,7 @@ import { createAgentNode } from './agent.node';
 import { ChatGoogle } from '@langchain/google';
 import { ConfigService } from '@nestjs/config';
 import { createSearchKnowledgeTool } from '../tools/search-knowledge.tool';
-import { createBookingTool } from '../tools/booking.tool';
+import { createBookingTool, createUpdateBookingTool } from '../tools/booking.tool';
 import { EmbeddingService } from '../../../../../common/embedding/embedding.service';
 import { KnowledgeBaseService } from '../../../knowledge-base/knowledge-base.service';
 import { BookingService } from '../../../booking/booking.service';
@@ -43,7 +43,11 @@ export class AgentGraphBuilder {
       this.bookingService,
       this.tenantTransaction,
     );
-    const tools = [searchKnowledgeTool, bookingTool];
+    const updateBookingTool = createUpdateBookingTool(
+      this.bookingService,
+      this.tenantTransaction,
+    );
+    const tools = [searchKnowledgeTool, bookingTool, updateBookingTool];
     const modelWithTools = this.model.bindTools(tools);
 
     const graph = new StateGraph(AgentState);
