@@ -3,7 +3,10 @@ import { BookingService } from '../booking.service';
 import { TenantTransaction } from '../../../../common/tenant-context/tenant-transaction';
 
 describe('BookingTool', () => {
-  let mockBookingService: { createBooking: jest.Mock };
+  let mockBookingService: {
+    createBooking: jest.Mock;
+    createReminders: jest.Mock;
+  };
   let mockTenantTransaction: { run: jest.Mock };
   let bookingTool: ReturnType<typeof createBookingTool>;
 
@@ -23,6 +26,7 @@ describe('BookingTool', () => {
   beforeEach(() => {
     mockBookingService = {
       createBooking: jest.fn(),
+      createReminders: jest.fn().mockResolvedValue(undefined),
     };
 
     mockTenantTransaction = {
@@ -99,6 +103,11 @@ describe('BookingTool', () => {
         time: '10:00',
         doctorName: 'Dr. Alice',
       });
+      expect(mockBookingService.createReminders).toHaveBeenCalledWith(
+        'tenant-123',
+        new Date('2026-08-25T10:00:00'),
+        'booking-abc',
+      );
       expect(response).toBe(
         'Booking confirmed with Dr. Alice on 2026-08-25 at 10:00. Booking id: booking-abc',
       );
