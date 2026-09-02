@@ -1,5 +1,6 @@
 import {
   createBookingTool,
+  createCancelBookingTool,
   createUpdateBookingTool,
 } from '../../agent/graph/tools/booking.tool';
 import { BookingService } from '../booking.service';
@@ -9,12 +10,14 @@ describe('BookingTool', () => {
   let mockBookingService: {
     createBooking: jest.Mock;
     updateBooking: jest.Mock;
+    cancelBooking: jest.Mock;
     createReminders: jest.Mock;
     cancelReminder: jest.Mock;
   };
   let mockTenantTransaction: { run: jest.Mock };
   let bookingTool: ReturnType<typeof createBookingTool>;
   let updateBookingTool: ReturnType<typeof createUpdateBookingTool>;
+  let cancelBookingTool: ReturnType<typeof createCancelBookingTool>;
 
   const validConfig = {
     configurable: {
@@ -33,6 +36,7 @@ describe('BookingTool', () => {
     mockBookingService = {
       createBooking: jest.fn(),
       updateBooking: jest.fn(),
+      cancelBooking: jest.fn(),
       createReminders: jest.fn().mockResolvedValue(undefined),
       cancelReminder: jest.fn().mockResolvedValue(undefined),
     };
@@ -49,6 +53,11 @@ describe('BookingTool', () => {
     );
 
     updateBookingTool = createUpdateBookingTool(
+      mockBookingService as unknown as BookingService,
+      mockTenantTransaction as unknown as TenantTransaction,
+    );
+
+    cancelBookingTool = createCancelBookingTool(
       mockBookingService as unknown as BookingService,
       mockTenantTransaction as unknown as TenantTransaction,
     );
@@ -455,5 +464,94 @@ describe('BookingTool', () => {
       });
     });
   });
+
+  describe('cancel_booking', () => {
+    describe('Tool Definition', () => {
+      it('should have correct name and description', () => {
+        expect(cancelBookingTool.name).toBe('cancel_booking');
+        expect(cancelBookingTool.description).toContain(
+          'Cancel an existing appointment',
+        );
+      });
+    });
+
+    describe('Configuration Validation', () => {
+      it('should throw an error if tenantId is missing from config', async () => {
+        await expect(
+          cancelBookingTool.invoke({}, {
+            configurable: { phoneNumber: '+1234567890' },
+          }),
+        ).rejects.toThrow(
+          'Tenant context or phone number missing from tool execution',
+        );
+      });
+
+      it('should throw an error if phoneNumber is missing from config', async () => {
+        await expect(
+          cancelBookingTool.invoke({}, {
+            configurable: { tenantId: 'tenant-123' },
+          }),
+        ).rejects.toThrow(
+          'Tenant context or phone number missing from tool execution',
+        );
+      });
+
+      it('should throw an error if configurable object is undefined', async () => {
+        await expect(
+          cancelBookingTool.invoke({}, {}),
+        ).rejects.toThrow(
+          'Tenant context or phone number missing from tool execution',
+        );
+      });
+    });
+
+    describe('Execution & Output Formatting', () => {
+      it('should call cancelBooking, cancel reminders, and return cancellation message', async () => {
+        mockBookingService.cancelBooking.mockResolvedValue({
+          status: 'CANCELLED',
+          bookingId: 'booking-xyz',
+          doctorName: 'Alice',
+          serviceName: 'Consultation',
+          date: '2026-08-25',
+          time: '10:00',
+          reminder24hJobId: 'job-24h-1',
+          reminder1hJobId: 'job-1h-1',
+        });
+
+        const response = await cancelBookingTool.invoke(
+          { bookingId: 'booking-xyz' },
+          validConfig,
+        );
+
+        expect(mockTenantTransaction.run).toHaveBeenCalledWith(
+          'tenant-123',
+          expect.any(Function),
+        );
+        expect(mockBookingService.cancelBooking).toHaveBeenCalledWith({
+          tenantId: 'tenant-123',
+          clientPhone: '+1234567890',
+          bookingId: 'booking-xyz',
+        });
+        expect(mockBookingService.cancelReminder).toHaveBeenCalledWith('job-24h-1');
+        expect(mockBookingService.cancelReminder).toHaveBeenCalledWith('job-1h-1');
+        expect(response).toBe(
+          'Your appointment with Dr. Alice for Consultation on 2026-08-25 at 10:00 has been cancelled successfully. Booking id: booking-xyz',
+        );
+      });
+
+      it('should return error message when status is BOOKING_NOT_FOUND', async () => {
+        mockBookingService.cancelBooking.mockResolvedValue({
+          status: 'BOOKING_NOT_FOUND',
+          message: 'No active booking found to cancel.',
+        });
+
+        const response = await cancelBookingTool.invoke({}, validConfig);
+
+        expect(response).toBe('No active booking found to cancel.');
+        expect(mockBookingService.cancelReminder).not.toHaveBeenCalled();
+      });
+    });
+  });
 });
+
 

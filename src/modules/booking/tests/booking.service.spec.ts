@@ -725,6 +725,8 @@ describe('BookingService', () => {
           end_time: new Date('2026-08-26T11:30:00'),
           status: 'confirmed',
           updated_at: expect.any(Date),
+          reminder_24h_job_id: null,
+          reminder_1h_job_id: null,
         },
       });
     });
@@ -784,6 +786,8 @@ describe('BookingService', () => {
           end_time: new Date('2026-08-26T11:45:00'),
           status: 'confirmed',
           updated_at: expect.any(Date),
+          reminder_24h_job_id: null,
+          reminder_1h_job_id: null,
         },
       });
     });
@@ -910,6 +914,142 @@ describe('BookingService', () => {
         oldReminder1hJobId: 'job-old-1h',
       });
       expect(mockDb.bookings.update).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('cancelBooking', () => {
+    const defaultParams = {
+      tenantId: 'tenant-123',
+      clientPhone: '+1234567890',
+    };
+
+    const mockActiveBooking = {
+      id: 'active-booking-1',
+      tenant_id: 'tenant-123',
+      doctor_id: 'doc-1',
+      service_id: 'svc-1',
+      client_phone: '+1234567890',
+      start_time: new Date('2026-08-25T10:00:00'),
+      end_time: new Date('2026-08-25T10:30:00'),
+      status: 'confirmed',
+      reminder_24h_job_id: 'job-24h-1',
+      reminder_1h_job_id: 'job-1h-1',
+      services: {
+        id: 'svc-1',
+        name: 'Consultation',
+      },
+      doctors: {
+        id: 'doc-1',
+        name: 'Alice',
+      },
+    };
+
+    it('should return BOOKING_NOT_FOUND when no active booking exists for client', async () => {
+      mockDb.bookings.findFirst.mockResolvedValue(null);
+
+      const result = await service.cancelBooking(defaultParams);
+
+      expect(mockDb.bookings.findFirst).toHaveBeenCalledWith({
+        where: {
+          client_phone: '+1234567890',
+          status: 'confirmed',
+          end_time: { gte: expect.any(Date) },
+        },
+        orderBy: {
+          start_time: 'asc',
+        },
+        include: {
+          services: true,
+          doctors: true,
+        },
+      });
+      expect(result).toEqual({
+        status: 'BOOKING_NOT_FOUND',
+        message: 'No active booking found to cancel.',
+      });
+      expect(mockDb.bookings.update).not.toHaveBeenCalled();
+    });
+
+    it('should return BOOKING_NOT_FOUND when specific bookingId does not exist or is already cancelled', async () => {
+      mockDb.bookings.findFirst.mockResolvedValue(null);
+
+      const result = await service.cancelBooking({
+        ...defaultParams,
+        bookingId: 'cancelled-or-missing-id',
+      });
+
+      expect(mockDb.bookings.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: 'cancelled-or-missing-id',
+          client_phone: '+1234567890',
+          status: { not: 'cancelled' },
+        },
+        include: {
+          services: true,
+          doctors: true,
+        },
+      });
+      expect(result).toEqual({
+        status: 'BOOKING_NOT_FOUND',
+        message: 'No active booking found to cancel.',
+      });
+      expect(mockDb.bookings.update).not.toHaveBeenCalled();
+    });
+
+    it('should cancel booking and update status to cancelled by phone number lookup', async () => {
+      mockDb.bookings.findFirst.mockResolvedValue(mockActiveBooking);
+      mockDb.bookings.update.mockResolvedValue({
+        ...mockActiveBooking,
+        status: 'cancelled',
+      });
+
+      const result = await service.cancelBooking(defaultParams);
+
+      expect(mockDb.bookings.update).toHaveBeenCalledWith({
+        where: { id: 'active-booking-1' },
+        data: {
+          status: 'cancelled',
+          updated_at: expect.any(Date),
+          reminder_24h_job_id: null,
+          reminder_1h_job_id: null,
+        },
+      });
+      expect(result).toEqual({
+        status: 'CANCELLED',
+        bookingId: 'active-booking-1',
+        doctorName: 'Alice',
+        serviceName: 'Consultation',
+        date: '2026-08-25',
+        time: '10:00',
+        reminder24hJobId: 'job-24h-1',
+        reminder1hJobId: 'job-1h-1',
+      });
+    });
+
+    it('should cancel booking when specific bookingId is provided', async () => {
+      mockDb.bookings.findFirst.mockResolvedValue(mockActiveBooking);
+      mockDb.bookings.update.mockResolvedValue({
+        ...mockActiveBooking,
+        status: 'cancelled',
+      });
+
+      const result = await service.cancelBooking({
+        ...defaultParams,
+        bookingId: 'active-booking-1',
+      });
+
+      expect(mockDb.bookings.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: 'active-booking-1',
+          client_phone: '+1234567890',
+          status: { not: 'cancelled' },
+        },
+        include: {
+          services: true,
+          doctors: true,
+        },
+      });
+      expect(result.status).toBe('CANCELLED');
     });
   });
 });
