@@ -175,3 +175,58 @@ export function createUpdateBookingTool(
   );
 }
 
+const cancelBookingSchema = z.object({
+  bookingId: z
+    .string()
+    .optional()
+    .describe('The specific booking ID to cancel, if provided by the client'),
+});
+
+export function createCancelBookingTool(
+  bookingService: BookingService,
+  tenantTransaction: TenantTransaction,
+) {
+  return tool(
+    async ({ bookingId }, config) => {
+      const tenantId = config.configurable?.tenantId;
+      const phoneNumber = config.configurable?.phoneNumber;
+      if (!tenantId || !phoneNumber) {
+        throw new Error(
+          'Tenant context or phone number missing from tool execution',
+        );
+      }
+
+      const result = await tenantTransaction.run(tenantId, async () => {
+        return bookingService.cancelBooking({
+          tenantId,
+          clientPhone: phoneNumber,
+          bookingId,
+        });
+      });
+
+      if (result.status === 'CANCELLED') {
+        if (result.reminder24hJobId) {
+          await bookingService.cancelReminder(result.reminder24hJobId);
+        }
+        if (result.reminder1hJobId) {
+          await bookingService.cancelReminder(result.reminder1hJobId);
+        }
+      }
+
+      switch (result.status) {
+        case 'CANCELLED':
+          return `Your appointment with Dr. ${result.doctorName} for ${result.serviceName} on ${result.date} at ${result.time} has been cancelled successfully. Booking id: ${result.bookingId}`;
+        case 'BOOKING_NOT_FOUND':
+          return result.message;
+      }
+    },
+    {
+      name: 'cancel_booking',
+      description:
+        'Cancel an existing appointment. Looks up the active appointment by phone number or by booking ID, marks it as cancelled, and removes scheduled reminders.',
+      schema: cancelBookingSchema,
+    },
+  );
+}
+
+

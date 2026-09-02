@@ -93,6 +93,28 @@ export type UpdateBookingResult =
       serviceName: string;
     };
 
+export interface CancelBookingParams {
+  tenantId: string;
+  clientPhone: string;
+  bookingId?: string;
+}
+
+export type CancelBookingResult =
+  | {
+      status: 'CANCELLED';
+      bookingId: string;
+      doctorName: string;
+      serviceName: string;
+      date: string;
+      time: string;
+      reminder24hJobId?: string | null;
+      reminder1hJobId?: string | null;
+    }
+  | {
+      status: 'BOOKING_NOT_FOUND';
+      message: string;
+    };
+
 @Injectable()
 export class BookingService {
   private readonly logger = new Logger(BookingService.name);
@@ -665,6 +687,71 @@ export class BookingService {
       time: cleanTime,
       nextDay: nextDayStr,
       serviceName: serviceRow.name,
+    };
+  }
+
+  async cancelBooking(params: CancelBookingParams): Promise<CancelBookingResult> {
+    const { clientPhone, bookingId } = params;
+
+    let existingBooking;
+    if (bookingId) {
+      existingBooking = await this.prisma.db.bookings.findFirst({
+        where: {
+          id: bookingId,
+          client_phone: clientPhone,
+          status: { not: 'cancelled' },
+        },
+        include: {
+          services: true,
+          doctors: true,
+        },
+      });
+    } else {
+      existingBooking = await this.prisma.db.bookings.findFirst({
+        where: {
+          client_phone: clientPhone,
+          status: 'confirmed',
+          end_time: { gte: new Date() },
+        },
+        orderBy: {
+          start_time: 'asc',
+        },
+        include: {
+          services: true,
+          doctors: true,
+        },
+      });
+    }
+
+    if (!existingBooking) {
+      return {
+        status: 'BOOKING_NOT_FOUND',
+        message: 'No active booking found to cancel.',
+      };
+    }
+
+    await this.prisma.db.bookings.update({
+      where: { id: existingBooking.id },
+      data: {
+        status: 'cancelled',
+        updated_at: new Date(),
+        reminder_24h_job_id: null,
+        reminder_1h_job_id: null,
+      },
+    });
+
+    const date = existingBooking.start_time.toISOString().split('T')[0];
+    const time = formatTime(existingBooking.start_time);
+
+    return {
+      status: 'CANCELLED',
+      bookingId: existingBooking.id,
+      doctorName: existingBooking.doctors.name,
+      serviceName: existingBooking.services.name,
+      date,
+      time,
+      reminder24hJobId: existingBooking.reminder_24h_job_id,
+      reminder1hJobId: existingBooking.reminder_1h_job_id,
     };
   }
 }
