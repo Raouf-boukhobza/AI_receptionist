@@ -9,6 +9,7 @@ import { createAgentNode } from './agent.node';
 import { ChatGoogle } from '@langchain/google';
 import { ConfigService } from '@nestjs/config';
 import { createSearchKnowledgeTool } from '../tools/search-knowledge.tool';
+import { createEscalateToHumanTool } from '../tools/escalate-to-human.tool';
 import {
   createBookingTool,
   createCancelBookingTool,
@@ -60,6 +61,7 @@ export class AgentGraphBuilder {
       bookingTool,
       updateBookingTool,
       cancelBookingTool,
+      createEscalateToHumanTool(),
     ];
     const modelWithTools = this.model.bindTools(tools);
 

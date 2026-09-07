@@ -30,13 +30,18 @@ export function createSearchKnowledgeTool(
         return knowledgeBaseService.searchTopChunk(tenantId, vector);
       });
 
-      if (!topChunk) {
+      if (!topChunk || topChunk.distance > 0.5) {
         return JSON.stringify({
+          found: false,
           message: 'No relevant information found in knowledge base.',
         });
       }
 
-      return JSON.stringify(topChunk);
+      return JSON.stringify({
+        found: true,
+        content: topChunk.content,
+        distance: topChunk.distance,
+      });
     },
     {
       name: 'search_knowledge',
