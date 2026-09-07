@@ -6,7 +6,7 @@ export function toLangChainMessage(message: messages) : BaseMessage {
     switch (message.sender) {
         case 'client':
             return new HumanMessage({
-                content: message.content,
+                content: `(Client): ${message.content}`,
                 additional_kwargs: {
                     sender: 'client',
                 },
@@ -19,7 +19,7 @@ export function toLangChainMessage(message: messages) : BaseMessage {
 
         case 'owner':
             return new HumanMessage({
-                content: message.content,
+                content: `(Staff): ${message.content}`,
                 additional_kwargs: {
                     sender: 'owner',
                 },

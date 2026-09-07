@@ -16,14 +16,11 @@ import {
   OutboundMessagesQueue,
 } from './queue/outbound-messages.queue';
 import { InboundMessagesProcessor } from './queue/inbound-messages.processor';
-import { ConversationsService } from '../conversations/conversations.service';
-import { ConversationsModule } from '../conversations/conversations.module';
 
 @Module({
   imports: [
     BullmqModule,
     TenantModule,
-    ConversationsModule,
     AgentModule,
     BullModule.registerQueue(
       {
@@ -68,6 +65,7 @@ import { ConversationsModule } from '../conversations/conversations.module';
     MessagesService,
     OutboundMessagesQueue,
     InboundMessagesProcessor,
-  ]
+  ],
+  exports: [OutboundMessagesQueue],
 })
 export class MessagingModule {}

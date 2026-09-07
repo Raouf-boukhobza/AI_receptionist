@@ -1,11 +1,12 @@
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
-import { INBOUND_MESSAGES_QUEUE, InboundMessagesJob, } from './inbound-messages.queue';
+import {
+  INBOUND_MESSAGES_QUEUE,
+  InboundMessagesJob,
+} from './inbound-messages.queue';
 import { AgentService } from '../../agent/agent.service';
 import { Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { TenantTransaction } from '../../../../common/tenant-context/tenant-transaction';
-import { ConversationsService } from '../../conversations/conversations.service';
-import { toLangChainMessage } from '../../agent/mappers/db-message.mapper';
 import { Prisma } from '../../../../generated/prisma/client';
 import { OutboundMessagesQueue } from './outbound-messages.queue';
 
@@ -15,7 +16,7 @@ export class InboundMessagesProcessor extends WorkerHost {
   constructor(
     private readonly agentService: AgentService,
     private readonly tenantTransaction: TenantTransaction,
-    private readonly outboundQueue : OutboundMessagesQueue,
+    private readonly outboundQueue: OutboundMessagesQueue,
   ) {
     super();
   }
@@ -23,13 +24,15 @@ export class InboundMessagesProcessor extends WorkerHost {
   async process(job: Job<InboundMessagesJob>) {
     const { tenantId, messageId } = job.data;
 
-    this.logger.log(`Processing inbound message ${messageId} for tenant ${tenantId}`);
-    await this.tenantTransaction.run(tenantId , async (tx) => {
+    this.logger.log(
+      `Processing inbound message ${messageId} for tenant ${tenantId}`,
+    );
+    await this.tenantTransaction.run(tenantId, async (tx) => {
       await tx.messages.update({
-        where : {id : messageId},
-        data : {status : 'processing'}
-      })
-    })
+        where: { id: messageId },
+        data: { status: 'processing' },
+      });
+    });
 
     //case 1: reply to message already exist
     const state = await this.tenantTransaction.run(tenantId, async (tx) => {
@@ -52,15 +55,14 @@ export class InboundMessagesProcessor extends WorkerHost {
       });
     }
 
-
     //case 2:reply doesn't exist
-    const reply = await this.agentService.getResponse(
+    const agentResult = await this.agentService.getResponse(
       state.inbound.content,
       tenantId,
       state.inbound.conversation_id,
       state.inbound.conversations.client_phone,
     );
-    this.logger.log(reply)
+    this.logger.log(`Agent result: ${JSON.stringify(agentResult)}`);
 
     const replyRow = await this.tenantTransaction.run(tenantId, async (tx) => {
       try {
@@ -71,17 +73,29 @@ export class InboundMessagesProcessor extends WorkerHost {
             sender: 'ai',
             status: 'pending_dispatch', // ← the outbox state
             reply_to_message_id: messageId, // ← Layer 3 unique guard
-            content: reply,
+            content: agentResult.reply,
           },
         });
-        await tx.messages.update({
-          where: {
-            id: messageId,
-          },
-          data: {
-            status: 'replied',
-          },
-        });
+
+        if (agentResult.escalated) {
+          await tx.conversations.update({
+            where: { id: state.inbound.conversation_id },
+            data: {
+              status: 'needs_human',
+              version: { increment: 1 },
+            },
+          });
+          await tx.messages.update({
+            where: { id: messageId },
+            data: { status: 'escalated' },
+          });
+        } else {
+          await tx.messages.update({
+            where: { id: messageId },
+            data: { status: 'replied' },
+          });
+        }
+
         return created;
       } catch (e) {
         if (
