@@ -97,6 +97,7 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "moduleNameMapper": {
+      "^@langchain/langgraph/prebuilt$": "<rootDir>/node_modules/@langchain/langgraph/dist/prebuilt/index.cjs",
       "^(\\.\\.?/.*)\\.js$": "$1"
     },
     "collectCoverageFrom": [

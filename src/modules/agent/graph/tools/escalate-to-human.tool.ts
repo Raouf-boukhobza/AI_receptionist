@@ -20,7 +20,7 @@ export const DEFAULT_HOLDING_MESSAGE =
 
 export function createEscalateToHumanTool() {
   return tool(
-    async ({ reason, holdingMessage }) => {
+    async ({ reason , holdingMessage }) => {
       return JSON.stringify({
         status: 'escalated',
         reason,

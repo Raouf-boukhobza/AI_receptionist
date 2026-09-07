@@ -533,6 +533,10 @@ describe('BookingService', () => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2026-08-20T10:00:00.000Z'));
 
+      const loggerSpy = jest
+        .spyOn((service as any).logger, 'error')
+        .mockImplementation(() => {});
+
       mockReminderQueue.addJob.mockRejectedValue(
         new Error('Redis connection down'),
       );
@@ -540,6 +544,10 @@ describe('BookingService', () => {
       await expect(
         service.createReminders(tenantId, startTime, bookingId),
       ).resolves.not.toThrow();
+
+      expect(loggerSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to schedule reminders for booking booking-123: Redis connection down'),
+      );
 
       jest.useRealTimers();
     });
@@ -558,10 +566,17 @@ describe('BookingService', () => {
     });
 
     it('should catch and log error without throwing when removeJob fails', async () => {
+      const loggerWarnSpy = jest
+        .spyOn((service as any).logger, 'warn')
+        .mockImplementation(() => {});
+
       mockReminderQueue.removeJob.mockRejectedValueOnce(
         new Error('Redis error'),
       );
       await expect(service.cancelReminder('job-error')).resolves.not.toThrow();
+      expect(loggerWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to remove reminder job job-error: Redis error'),
+      );
     });
   });
 

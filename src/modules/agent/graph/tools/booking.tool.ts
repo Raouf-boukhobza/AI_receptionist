@@ -33,7 +33,21 @@ export function createBookingTool(
         );
       }
 
-      const result = await tenantTransaction.run(tenantId, async () => {
+      const result = await tenantTransaction.run(tenantId, async (tx) => {
+        if (config.configurable?.conversationId) {
+          const conv = await tx.conversations.findUnique({
+            where: { id: config.configurable.conversationId },
+            select: { status: true },
+          });
+          if (conv && conv.status !== 'ai_active') {
+            return {
+              status: 'HUMAN_TAKEOVER',
+              message:
+                'Conversation is currently in human takeover mode. Appointment booking was skipped.',
+            } as any;
+          }
+        }
+
         return bookingService.createBooking({
           tenantId,
           clientPhone: phoneNumber,
@@ -43,6 +57,10 @@ export function createBookingTool(
           doctorName,
         });
       });
+
+      if (result.status === 'HUMAN_TAKEOVER') {
+        return result.message;
+      }
       if (result.status === 'CONFIRMED') {
         await bookingService.createReminders(
             tenantId,
