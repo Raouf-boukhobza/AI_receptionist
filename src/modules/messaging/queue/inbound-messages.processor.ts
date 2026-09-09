@@ -55,6 +55,22 @@ export class InboundMessagesProcessor extends WorkerHost {
       });
     }
 
+    // Pre-LLM check: if conversation is no longer ai_active, skip AI generation
+    if (state.inbound.conversations.status !== 'ai_active') {
+      this.logger.log(
+        `Conversation ${state.inbound.conversation_id} is in "${state.inbound.conversations.status}" mode (not ai_active). Skipping AI processing for message ${messageId}.`,
+      );
+      await this.tenantTransaction.run(tenantId, async (tx) => {
+        await tx.messages.update({
+          where: { id: messageId },
+          data: { status: 'received' },
+        });
+      });
+      return;
+    }
+
+    const currentVersion = state.inbound.conversations.version;
+
     //case 2:reply doesn't exist
     const agentResult = await this.agentService.getResponse(
       state.inbound.content,
@@ -65,6 +81,25 @@ export class InboundMessagesProcessor extends WorkerHost {
     this.logger.log(`Agent result: ${JSON.stringify(agentResult)}`);
 
     const replyRow = await this.tenantTransaction.run(tenantId, async (tx) => {
+      // Optimistic concurrency check: verify version and status haven't changed during LLM execution
+      const currentConv = await tx.conversations.findUniqueOrThrow({
+        where: { id: state.inbound.conversation_id },
+      });
+
+      if (
+        currentConv.version !== currentVersion ||
+        currentConv.status !== 'ai_active'
+      ) {
+        this.logger.warn(
+          `Conversation ${state.inbound.conversation_id} state changed during AI generation (version: ${currentVersion} -> ${currentConv.version}, status: ${currentConv.status}). Discarding AI reply draft.`,
+        );
+        await tx.messages.update({
+          where: { id: messageId },
+          data: { status: 'received' },
+        });
+        return null;
+      }
+
       try {
         const created = await tx.messages.create({
           data: {
@@ -83,6 +118,7 @@ export class InboundMessagesProcessor extends WorkerHost {
             data: {
               status: 'needs_human',
               version: { increment: 1 },
+              updated_at: new Date(),
             },
           });
           await tx.messages.update({
@@ -90,6 +126,13 @@ export class InboundMessagesProcessor extends WorkerHost {
             data: { status: 'escalated' },
           });
         } else {
+          await tx.conversations.update({
+            where: { id: state.inbound.conversation_id },
+            data: {
+              version: { increment: 1 },
+              updated_at: new Date(),
+            },
+          });
           await tx.messages.update({
             where: { id: messageId },
             data: { status: 'replied' },

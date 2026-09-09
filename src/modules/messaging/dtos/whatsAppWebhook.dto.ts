@@ -67,6 +67,31 @@ class ContactDto {
     wa_id: string;
 }
 
+// ---- message_echoes[] (coexistence / mobile replies from WhatsApp Business App) ----
+export class MessageEchoDto {
+    @IsString()
+    id: string;
+
+    @IsString()
+    to: string;
+
+    @IsOptional()
+    @IsString()
+    from?: string;
+
+    @IsString()
+    timestamp: string;
+
+    @IsString()
+    type: string;
+
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => TextDto)
+    text?: TextDto;
+}
+
 // ---- metadata ----
 class MetadataDto {
     @IsString()
@@ -97,6 +122,12 @@ class ValueDto {
     @ValidateNested({ each: true })
     @Type(() => MessageDto)
     messages?: MessageDto[];
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => MessageEchoDto)
+    message_echoes?: MessageEchoDto[];
 
     @IsOptional()
     @IsArray()
