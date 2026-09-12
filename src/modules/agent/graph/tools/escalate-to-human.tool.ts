@@ -30,7 +30,7 @@ export function createEscalateToHumanTool() {
     {
       name: 'escalate_to_human',
       description:
-        'Call this tool when the client asks a question that is NOT found in the knowledge base, requires staff/doctor confirmation, or when the client explicitly asks to speak to a human.',
+        'LAST RESORT ONLY. Call ONLY AFTER you have already called search_knowledge (for info questions) or create_booking/update_booking/cancel_booking (for booking requests) and the tool result proves you cannot help. NEVER call this as your first action. NEVER call this to avoid calling another tool. For info questions you MUST call search_knowledge first and only escalate if it returns found:false. For booking requests you MUST call the booking tool first and present its output — NEVER escalate on SERVICE_NOT_FOUND, DOCTOR_NOT_AVAILABLE, or UNAVAILABLE, just relay the result to the client. Only escalate immediately (without prior tool call) if the client explicitly asks for a human/doctor/staff or reports an emergency/complex complaint.',
       schema: escalateToHumanSchema,
     },
   );

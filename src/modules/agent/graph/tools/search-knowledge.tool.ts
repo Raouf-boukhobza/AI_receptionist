@@ -46,7 +46,7 @@ export function createSearchKnowledgeTool(
     {
       name: 'search_knowledge',
       description:
-        "Search the clinic's knowledge base for information about services, prices, hours, or FAQs.",
+        'MANDATORY FIRST STEP for ANY question about services, prices, durations, hours, doctors, availability, or clinic policies/FAQs. You MUST call this BEFORE answering and BEFORE even considering escalate_to_human. Input is the client question rephrased as a search query.',
       schema: searchKnowledgeSchema,
     },
   );

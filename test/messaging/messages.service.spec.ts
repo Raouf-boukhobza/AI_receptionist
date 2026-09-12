@@ -9,6 +9,7 @@ describe('MessagesService', () => {
   let mockTenantService: { getTenantIdByPhoneNumberId: jest.Mock };
   let mockTenantTransaction: { run: jest.Mock };
   let mockInboundMessagesQueue: { addJob: jest.Mock };
+  let mockRedis: any;
   let mockTx: any;
 
   beforeEach(() => {
@@ -16,6 +17,7 @@ describe('MessagesService', () => {
       messages: {
         findFirst: jest.fn(),
         create: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       conversations: {
         findFirst: jest.fn(),
@@ -36,10 +38,18 @@ describe('MessagesService', () => {
       addJob: jest.fn().mockResolvedValue(undefined),
     };
 
+    mockRedis = {
+      get: jest.fn(),
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
+      getdel: jest.fn(),
+    };
+
     service = new MessagesService(
       mockTenantService as unknown as TenantService,
       mockTenantTransaction as unknown as TenantTransaction,
       mockInboundMessagesQueue as unknown as InboundMessagesQueue,
+      mockRedis as any,
     );
   });
 
@@ -304,6 +314,158 @@ describe('MessagesService', () => {
           waMessageId: 'wamid.client1',
         },
       ]);
+    });
+  });
+
+  describe('WhatsApp Delivery / Read Status Webhooks (statuses[])', () => {
+    const buildStatusPayload = (statuses: any[]): WhatsappWebhookDto => ({
+      object: 'whatsapp_business_account',
+      entry: [
+        {
+          id: 'entry-1',
+          changes: [
+            {
+              field: 'messages',
+              value: {
+                messaging_product: 'whatsapp',
+                metadata: {
+                  phone_number_id: 'pn-123',
+                  display_phone_number: '+15550001',
+                },
+                statuses,
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    it('updates message to delivered with converted timestamp', async () => {
+      mockTenantService.getTenantIdByPhoneNumberId.mockResolvedValue('tenant-1');
+      mockTx.messages.updateMany.mockResolvedValue({ count: 1 });
+
+      const payload = buildStatusPayload([
+        {
+          id: 'wamid.status.1',
+          status: 'delivered',
+          timestamp: '1725970000',
+          recipient_id: '+123456',
+        },
+      ]);
+
+      await service.saveInboundMessage(payload);
+
+      expect(mockTenantTransaction.run).toHaveBeenCalledWith('tenant-1', expect.any(Function));
+      expect(mockTx.messages.updateMany).toHaveBeenCalledWith({
+        where: {
+          wa_message_id: 'wamid.status.1',
+          status: { in: ['sent'] },
+        },
+        data: {
+          status: 'delivered',
+          delivered_at: new Date(1725970000 * 1000),
+        },
+      });
+      expect(mockRedis.set).not.toHaveBeenCalled();
+    });
+
+    it('updates message to read when read status arrives', async () => {
+      mockTenantService.getTenantIdByPhoneNumberId.mockResolvedValue('tenant-1');
+      mockTx.messages.updateMany.mockResolvedValue({ count: 1 });
+
+      const payload = buildStatusPayload([
+        {
+          id: 'wamid.status.2',
+          status: 'read',
+          timestamp: '1725970050',
+          recipient_id: '+123456',
+        },
+      ]);
+
+      await service.saveInboundMessage(payload);
+
+      expect(mockTx.messages.updateMany).toHaveBeenCalledWith({
+        where: {
+          wa_message_id: 'wamid.status.2',
+          status: { in: ['sent', 'delivered'] },
+        },
+        data: {
+          status: 'read',
+          delivered_at: new Date(1725970050 * 1000),
+        },
+      });
+    });
+
+    it('updates message to undeliverable with last_error when failed status arrives', async () => {
+      mockTenantService.getTenantIdByPhoneNumberId.mockResolvedValue('tenant-1');
+      mockTx.messages.updateMany.mockResolvedValue({ count: 1 });
+
+      const payload = buildStatusPayload([
+        {
+          id: 'wamid.status.3',
+          status: 'failed',
+          timestamp: '1725970100',
+          recipient_id: '+123456',
+          errors: [{ code: 131047, title: 'Re-engagement message needed' }],
+        },
+      ]);
+
+      await service.saveInboundMessage(payload);
+
+      expect(mockTx.messages.updateMany).toHaveBeenCalledWith({
+        where: {
+          wa_message_id: 'wamid.status.3',
+          status: { in: ['sending', 'sent', 'delivered'] },
+        },
+        data: {
+          status: 'undeliverable',
+          last_error: '131047 Re-engagement message needed',
+        },
+      });
+    });
+
+    it('ignores sent status update', async () => {
+      mockTenantService.getTenantIdByPhoneNumberId.mockResolvedValue('tenant-1');
+
+      const payload = buildStatusPayload([
+        {
+          id: 'wamid.status.4',
+          status: 'sent',
+          timestamp: '1725970000',
+          recipient_id: '+123456',
+        },
+      ]);
+
+      await service.saveInboundMessage(payload);
+
+      expect(mockTx.messages.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('caches early receipt in Redis with 60s TTL if message not found yet (race condition)', async () => {
+      mockTenantService.getTenantIdByPhoneNumberId.mockResolvedValue('tenant-1');
+      mockTx.messages.updateMany.mockResolvedValue({ count: 0 }); // Row not committed in DB yet!
+
+      const payload = buildStatusPayload([
+        {
+          id: 'wamid.early.1',
+          status: 'delivered',
+          timestamp: '1725970000',
+          recipient_id: '+123456',
+        },
+      ]);
+
+      await service.saveInboundMessage(payload);
+
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        'early_receipt:wamid.early.1',
+        JSON.stringify({
+          status: 'delivered',
+          delivered_at: new Date(1725970000 * 1000).toISOString(),
+          error: null,
+        }),
+        'EX',
+        60,
+      );
     });
   });
 });
