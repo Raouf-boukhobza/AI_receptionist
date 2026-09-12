@@ -13,14 +13,17 @@ export class ConversationsService {
     private readonly outboundMessagesQueue: OutboundMessagesQueue,
   ) {}
 
-  async fetchMessages(conversationId: string) {
-    return this.prismaService.db.messages.findMany({
-      where: {
-        conversation_id: conversationId,
-      },
-      orderBy: {
-        created_at: 'asc',
-      },
+  async fetchMessages(tenantId: string, conversationId: string) {
+    return this.tenantTransaction.run(tenantId, async (tx) => {
+      return tx.messages.findMany({
+        where: {
+          tenant_id: tenantId,
+          conversation_id: conversationId,
+        },
+        orderBy: {
+          created_at: 'asc',
+        },
+      });
     });
   }
 
@@ -33,18 +36,20 @@ export class ConversationsService {
     conversationId: string,
     limit: number = 20,
   ) {
-    const rawMessages = await this.prismaService.db.messages.findMany({
-      where: {
-        tenant_id: tenantId,
-        conversation_id: conversationId,
-        status: {
-          notIn: ['dispatch_failed', 'dead', 'undeliverable'],
+    const rawMessages = await this.tenantTransaction.run(tenantId, async (tx) => {
+      return tx.messages.findMany({
+        where: {
+          tenant_id: tenantId,
+          conversation_id: conversationId,
+          status: {
+            notIn: ['dispatch_failed', 'dead', 'undeliverable'],
+          },
         },
-      },
-      orderBy: {
-        created_at: 'desc',
-      },
-      take: limit,
+        orderBy: {
+          created_at: 'desc',
+        },
+        take: limit,
+      });
     });
 
     return rawMessages.reverse();
@@ -144,24 +149,25 @@ export class ConversationsService {
         },
       });
 
-      const newStatus = dto.resumeAi !== false ? 'ai_active' : 'human_active';
-
-      await tx.conversations.update({
+      const updatedConv = await tx.conversations.update({
         where: { id: conversationId },
         data: {
-          status: newStatus,
+          status: 'human_active',
           version: { increment: 1 },
           updated_at: new Date(),
         },
+        select: { version: true },
       });
 
-      return { createdMessage, newStatus };
+      return { createdMessage, expectedVersion: updatedConv.version };
     });
 
     // Enqueue outbound dispatch after database transaction commits
     await this.outboundMessagesQueue.addJob({
       tenantId,
       messageId: result.createdMessage.id,
+      expectedVersion: result.expectedVersion,
+      resumeAi: dto.resumeAi !== false,
     });
 
     return result.createdMessage;

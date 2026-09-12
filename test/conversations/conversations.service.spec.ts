@@ -168,8 +168,9 @@ describe('ConversationsService', () => {
 
   describe('replyToConversation', () => {
     it('creates message, sets status to ai_active (default resumeAi), increments version, and enqueues outbound job', async () => {
-      const mockConv = { id: 'conv-1', tenant_id: 'tenant-1', version: 2 };
+      const mockConv = { id: 'conv-1', tenant_id: 'tenant-1', version: 1 };
       mockTx.conversations.findUnique.mockResolvedValue(mockConv);
+      mockTx.conversations.update.mockResolvedValue({ version: 2 });
       const mockMsg = { id: 'msg-1', content: 'Hello patient', sender: 'owner' };
       mockTx.messages.create.mockResolvedValue(mockMsg);
 
@@ -190,15 +191,18 @@ describe('ConversationsService', () => {
       expect(mockTx.conversations.update).toHaveBeenCalledWith({
         where: { id: 'conv-1' },
         data: {
-          status: 'ai_active',
+          status: 'human_active',
           version: { increment: 1 },
           updated_at: expect.any(Date),
         },
+        select: { version: true },
       });
 
       expect(mockOutboundMessagesQueue.addJob).toHaveBeenCalledWith({
         tenantId: 'tenant-1',
         messageId: 'msg-1',
+        expectedVersion: 2,
+        resumeAi: true,
       });
 
       expect(result).toEqual(mockMsg);
@@ -207,6 +211,7 @@ describe('ConversationsService', () => {
     it('sets status to human_active when resumeAi is false', async () => {
       const mockConv = { id: 'conv-1', tenant_id: 'tenant-1', version: 1 };
       mockTx.conversations.findUnique.mockResolvedValue(mockConv);
+      mockTx.conversations.update.mockResolvedValue({ version: 2 });
       const mockMsg = { id: 'msg-2', content: 'Wait here', sender: 'owner' };
       mockTx.messages.create.mockResolvedValue(mockMsg);
 
@@ -222,6 +227,14 @@ describe('ConversationsService', () => {
           version: { increment: 1 },
           updated_at: expect.any(Date),
         },
+        select: { version: true },
+      });
+
+      expect(mockOutboundMessagesQueue.addJob).toHaveBeenCalledWith({
+        tenantId: 'tenant-1',
+        messageId: 'msg-2',
+        expectedVersion: 2,
+        resumeAi: false,
       });
     });
 

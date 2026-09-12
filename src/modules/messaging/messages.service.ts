@@ -1,12 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   MessageDto,
   MessageEchoDto,
+  StatusDto,
   WhatsappWebhookDto,
 } from './dtos/whatsAppWebhook.dto';
 import { TenantService } from '../tenantModule/tenant.service';
 import { InboundMessagesQueue } from './queue/inbound-messages.queue';
 import { TenantTransaction } from '../../../common/tenant-context/tenant-transaction';
+import { REDIS_CLIENT } from '../../../common/redis/redis.provider';
+import Redis from 'ioredis';
 
 @Injectable()
 export class MessagesService {
@@ -16,6 +19,7 @@ export class MessagesService {
     private readonly tenantService: TenantService,
     private readonly tenantTransaction: TenantTransaction,
     private readonly inboundMessagesQueue: InboundMessagesQueue,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   async saveInboundMessage(payload: WhatsappWebhookDto) {
@@ -92,10 +96,103 @@ export class MessagesService {
             }
           }
         }
+
+        // 3. Handle delivery/read receipts (statuses[])
+        const statuses = value.statuses;
+        if (statuses && Array.isArray(statuses) && statuses.length > 0) {
+          try {
+            await this.applyStatusUpdates(tenantId, statuses);
+          } catch (error) {
+            this.logger.error(
+              `Failed to process status updates for tenant ${tenantId}: ${(error as Error).message}`,
+              (error as Error).stack,
+            );
+          }
+        }
       }
     }
 
     return processedMessages;
+  }
+
+  /**
+   * Applies WhatsApp delivery/read receipts monotonically.
+   * Caches in Redis if message row is not found yet (race condition where receipt arrives before Phase C commits wa_message_id).
+   */
+  async applyStatusUpdates(
+    tenantId: string,
+    statuses: StatusDto[],
+  ): Promise<void> {
+    for (const status of statuses) {
+      if (status.status === 'sent') {
+        continue;
+      }
+
+      const wamid = status.id;
+      const deliveredAt = status.timestamp
+        ? new Date(Number(status.timestamp) * 1000)
+        : new Date();
+      const errorStr = status.errors?.[0]
+        ? `${status.errors[0].code} ${status.errors[0].title}`
+        : null;
+
+      let targetStatus: 'delivered' | 'read' | 'undeliverable';
+      let allowedPriorStatuses: string[];
+
+      if (status.status === 'delivered') {
+        targetStatus = 'delivered';
+        allowedPriorStatuses = ['sent'];
+      } else if (status.status === 'read') {
+        targetStatus = 'read';
+        allowedPriorStatuses = ['sent', 'delivered'];
+      } else if (status.status === 'failed') {
+        targetStatus = 'undeliverable';
+        allowedPriorStatuses = ['sending', 'sent', 'delivered'];
+      } else {
+        continue;
+      }
+
+      const updatedCount = await this.tenantTransaction.run(tenantId, async (tx) => {
+        const res = await tx.messages.updateMany({
+          where: {
+            wa_message_id: wamid,
+            status: { in: allowedPriorStatuses as any },
+          },
+          data: {
+            status: targetStatus,
+            ...(targetStatus === 'delivered' || targetStatus === 'read'
+              ? { delivered_at: deliveredAt }
+              : {}),
+            ...(targetStatus === 'undeliverable' ? { last_error: errorStr } : {}),
+          },
+        });
+        return res.count;
+      });
+
+      if (updatedCount === 0) {
+        try {
+          await this.redis.set(
+            `early_receipt:${wamid}`,
+            JSON.stringify({
+              status: targetStatus,
+              delivered_at: deliveredAt.toISOString(),
+              error: errorStr,
+            }),
+            'EX',
+            60,
+          );
+          this.logger.log(`Cached early receipt in Redis for wamid ${wamid}`);
+        } catch (redisErr: any) {
+          this.logger.warn(
+            `Failed caching early receipt in Redis for ${wamid}: ${redisErr.message}`,
+          );
+        }
+      } else {
+        this.logger.log(
+          `Applied status update "${targetStatus}" to message with wamid ${wamid} for tenant ${tenantId}`,
+        );
+      }
+    }
   }
 
   /**

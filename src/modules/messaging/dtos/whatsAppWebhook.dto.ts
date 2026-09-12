@@ -4,6 +4,7 @@
 import { Type } from 'class-transformer';
 import {
     IsString,
+    IsNumber,
     IsArray,
     IsOptional,
     ValidateNested,
@@ -37,7 +38,19 @@ export class MessageDto {
 }
 
 // ---- statuses[] (delivery/read receipts, not client messages) ----
-class StatusDto {
+export class StatusErrorDto {
+    @IsNumber()
+    code: number;
+
+    @IsString()
+    title: string;
+
+    @IsOptional()
+    @IsString()
+    message?: string;
+}
+
+export class StatusDto {
     @IsString()
     id: string;
 
@@ -47,8 +60,15 @@ class StatusDto {
     @IsString()
     timestamp: string;
 
+    @IsOptional()
     @IsString()
-    recipient_id: string;
+    recipient_id?: string;
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => StatusErrorDto)
+    errors?: StatusErrorDto[];
 }
 
 // ---- contacts[] ----

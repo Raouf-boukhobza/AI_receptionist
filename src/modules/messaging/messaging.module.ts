@@ -1,4 +1,4 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { BullmqModule } from '../../../common/bullmq/bullmq.module';
 import { BullModule } from '@nestjs/bullmq';
 import { BullBoardModule } from '@bull-board/nestjs';
@@ -16,12 +16,16 @@ import {
   OutboundMessagesQueue,
 } from './queue/outbound-messages.queue';
 import { InboundMessagesProcessor } from './queue/inbound-messages.processor';
+import { OutboundMessagesProcessor } from './queue/outbound-messages.processor';
+import { OutboundSweeperService } from './queue/outbound-sweeper.service';
+import { WhatsappModule } from '../whatsapp/whatsapp.module';
 
 @Module({
   imports: [
     BullmqModule,
     TenantModule,
     AgentModule,
+    WhatsappModule,
     BullModule.registerQueue(
       {
         name: INBOUND_MESSAGES_QUEUE,
@@ -54,8 +58,8 @@ import { InboundMessagesProcessor } from './queue/inbound-messages.processor';
         adapter: BullMQAdapter,
       },
       {
-        name : OUTBOUND_MESSAGES_QUEUE,
-        adapter : BullMQAdapter
+        name: OUTBOUND_MESSAGES_QUEUE,
+        adapter: BullMQAdapter,
       },
     ),
   ],
@@ -65,7 +69,9 @@ import { InboundMessagesProcessor } from './queue/inbound-messages.processor';
     MessagesService,
     OutboundMessagesQueue,
     InboundMessagesProcessor,
+    OutboundMessagesProcessor,
+    OutboundSweeperService,
   ],
-  exports: [OutboundMessagesQueue],
+  exports: [OutboundMessagesQueue, OutboundSweeperService],
 })
 export class MessagingModule {}
