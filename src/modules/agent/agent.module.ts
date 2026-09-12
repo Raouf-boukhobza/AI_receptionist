@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { AgentService } from './agent.service';
 import { AgentGraphBuilder } from './graph/nodes/agent-graph.builder';
 import { AgentController } from './agent.controller';
@@ -11,7 +11,7 @@ import { BookingModule } from '../booking/booking.module';
   imports: [
     KnowledgeBaseModule,
     EmbeddingModule,
-    ConversationsModule,
+    forwardRef(() => ConversationsModule),
     BookingModule,
   ],
   controllers: [AgentController],

@@ -30,6 +30,7 @@ export class AgentGraphBuilder {
     this.model = new ChatGoogle({
       model: 'gemini-3.6-flash',
       apiKey: this.configService.get<string>('GEMINI_API_KEY'),
+      temperature: 0,
     });
   }
 

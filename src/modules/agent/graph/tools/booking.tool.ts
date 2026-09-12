@@ -92,7 +92,7 @@ export function createBookingTool(
     {
       name: 'create_booking',
       description:
-        'Book an appointment. Validates doctor working hours and booking conflicts, and suggests alternative available slots if the requested slot is taken or outside working hours.',
+        'Book an appointment. Call this as soon as service + date + time are known (ask the client first if any is missing). Validates doctor working hours and booking conflicts, and suggests alternative available slots if the requested slot is taken or outside working hours. ALWAYS present the tool result to the client — NEVER call escalate_to_human on SERVICE_NOT_FOUND, DOCTOR_NOT_AVAILABLE, or UNAVAILABLE.',
       schema: bookingSchema,
     },
   );
@@ -187,7 +187,7 @@ export function createUpdateBookingTool(
     {
       name: 'update_booking',
       description:
-        'Update or reschedule an existing appointment to a new date, time, service, or doctor. Validates doctor working hours and conflicts, and suggests alternatives if requested slot is unavailable.',
+        'Update or reschedule an existing appointment to a new date, time, service, or doctor. Call this as soon as the new date + time are known. ALWAYS present the tool result to the client — NEVER call escalate_to_human on BOOKING_NOT_FOUND, SERVICE_NOT_FOUND, DOCTOR_NOT_AVAILABLE, or UNAVAILABLE, just relay the result.',
       schema: updateBookingSchema,
     },
   );
@@ -241,7 +241,7 @@ export function createCancelBookingTool(
     {
       name: 'cancel_booking',
       description:
-        'Cancel an existing appointment. Looks up the active appointment by phone number or by booking ID, marks it as cancelled, and removes scheduled reminders.',
+        'Cancel an existing appointment. Looks up the active appointment by phone number or by booking ID, marks it as cancelled, and removes scheduled reminders. ALWAYS present the tool result to the client — NEVER call escalate_to_human on BOOKING_NOT_FOUND, just relay the result.',
       schema: cancelBookingSchema,
     },
   );
