@@ -39,6 +39,18 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    profiles: ["ngrok"]
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    command: http app:3000
+    ports:
+      - "4040:4040"
+
 volumes:
   pgdata:
   redis_data:
