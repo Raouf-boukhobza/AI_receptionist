@@ -114,8 +114,9 @@ export class MessageEchoDto {
 
 // ---- metadata ----
 class MetadataDto {
+    @IsOptional()
     @IsString()
-    display_phone_number: string;
+    display_phone_number?: string;
 
     @IsString()
     phone_number_id: string;
@@ -151,6 +152,8 @@ class ValueDto {
 
     @IsOptional()
     @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => StatusDto)
     statuses?: StatusDto[];
 }
 

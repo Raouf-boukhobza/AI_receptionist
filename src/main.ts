@@ -1,12 +1,16 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { VersioningType } from '@nestjs/common';
+import { RequestMethod, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody:true preserves the exact bytes Meta signed (X-Hub-Signature-256).
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const configService = app.get(ConfigService);
-  app.setGlobalPrefix('api');
+  // Meta calls GET/POST /webhook at the domain root — keep it outside /api + versioning.
+  app.setGlobalPrefix('api', {
+    exclude: [{ path: 'webhook', method: RequestMethod.ALL }],
+  });
   app.enableVersioning({
     type: VersioningType.URI,
   });

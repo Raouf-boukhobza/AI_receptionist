@@ -11,6 +11,7 @@ import { AgentModule } from '../agent/agent.module';
 import { TenantModule } from '../tenantModule/tenant.module';
 import { MessagesService } from './messages.service';
 import { MessagesController } from './messages.controller';
+import { WhatsappWebhookController } from './whatsapp-webhook.controller';
 import {
   OUTBOUND_MESSAGES_QUEUE,
   OutboundMessagesQueue,
@@ -63,7 +64,7 @@ import { WhatsappModule } from '../whatsapp/whatsapp.module';
       },
     ),
   ],
-  controllers: [MessagesController],
+  controllers: [MessagesController, WhatsappWebhookController],
   providers: [
     InboundMessagesQueue,
     MessagesService,
