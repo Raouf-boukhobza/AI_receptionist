@@ -1,98 +1,125 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# AI Receptionist — Multi-Tenant WhatsApp Booking Agent
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+> NestJS modular monolith that answers WhatsApp messages with an AI receptionist, books appointments without double-booking, and escalates to humans when needed.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+![NestJS](https://img.shields.io/badge/NestJS-11-E0234E) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16_RLS-336791) ![pgvector](https://img.shields.io/badge/pgvector-RAG-009485) ![BullMQ](https://img.shields.io/badge/BullMQ-async-FF6138) ![LangGraph](https://img.shields.io/badge/LangGraph-agent-1C3C3C) ![WhatsApp](https://img.shields.io/badge/WhatsApp-Cloud_API_v21-25D366) ![Jest](https://img.shields.io/badge/tests-Jest+Cov-C21325)
 
-## Description
+Built for one real use-case, done properly: **a dental clinic receives a WhatsApp message → AI answers from its own knowledge base → books / reschedules / cancels → sends reminders → hands off to staff on edge cases.** Multi-tenant from day one.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+---
 
-## Project setup
+## 1. How it works
 
-```bash
-$ npm install
+```mermaid
+graph LR
+    WA[Meta WhatsApp] -->|POST /webhook| API[WebhookController<br/>verify signature + persist-first]
+    API -->|IDs only| Q1[(inbound-messages<br/>concurrency 10)]
+    Q1 --> W1[InboundProcessor<br/>LLM outside TX]
+    W1 -->|COMMIT| DB[(PostgreSQL RLS<br/>messages outbox)]
+    DB -->|pending_dispatch| Q2[(outbound-messages<br/>concurrency 5)]
+    Q2 --> W2[OutboundProcessor<br/>claim → send → mark sent]
+    W2 --> WA
+    DB -.->|sweep stranded rows| SW[OutboxSweeper<br/>stale sending → failed → dead]
+    SW --> Q2
 ```
 
-## Compile and run the project
+**The key guarantee:** the AI reply is `COMMIT`ted as `pending_dispatch` *before* the send job is enqueued. If Redis fails or the worker dies, the retry skips the LLM and just re-enqueues the send. No repeated `$` LLM calls, no lost replies.
 
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+```mermaid
+stateDiagram-v2
+    [*] --> received : webhook persisted
+    received --> processing : inbound worker
+    processing --> replied : AI row committed
+    processing --> escalated : needs_human
+    [*] --> pending_dispatch : outbox row
+    pending_dispatch --> sending : atomic claim
+    sending --> sent : Meta returns wamid
+    sending --> dispatch_failed : retryable
+    dispatch_failed --> pending_dispatch : retry / sweeper
+    dispatch_failed --> dead : 3/3 exhausted
+    sent --> delivered : status webhook
+    delivered --> read : status webhook
 ```
 
-## Run tests
+## 2. The AI agent
 
-```bash
-# unit tests
-$ npm run test
+Stateless LangGraph (`agent ↔ tools` loop) using `ChatGoogle gemini-3.6-flash`, temp `0`. History = last 20 PG messages. Tenant context passed via `configurable: { tenantId, conversationId, phoneNumber }`.
 
-# e2e tests
-$ npm run test:e2e
+| Tool | What it does |
+|---|---|
+| `search_knowledge` | **Mandatory first step.** pgvector cosine search (`gemini-embedding-001`, 1536d, threshold `0.5`) over services / FAQs / doctor hours |
+| `create_booking` | Validates hours + conflicts, picks a free doctor, suggests same-day + next-day alternatives |
+| `update_booking` | Reschedules, keeps doctor if possible, rotates reminder jobs |
+| `cancel_booking` | Cancels by ID or latest active, removes reminders |
+| `escalate_to_human` | Last resort only — flips conversation to `needs_human` + holding message |
 
-# test coverage
-$ npm run test:cov
+System prompt enforces: *never invent prices/hours, always relay tool results, never escalate on `UNAVAILABLE / NOT_FOUND`.*
+
+## 3. Why bookings don't double-book
+
+* Working-hours check (`doctor_hours` per weekday) + in-memory conflict check + **DB guard** (`P2002` / `23P01` exclusion violation → try next doctor).
+* Reminders via `REMINDER_QUEUE`: delayed jobs at `start-24h` / `start-1h`, job IDs stored on `bookings`.
+* Concurrency-safe conversations: `status (ai_active / needs_human / human_active)` + `version` optimistic locking. AI draft discarded if staff took over mid-LLM-run. Owner replies suppress stale AI sends and auto-resume to `ai_active` (CAS on version).
+
+## 4. Multi-tenancy + reliability
+
+| Concern | Implementation |
+|---|---|
+| Isolation | Postgres RLS via short `TenantTransaction.run()` (`set_config('app.current_tenant', $1, true)` — bound param, never interpolated) |
+| Tenant resolution | `phone_number_id → tenantId` cached in Redis 24h |
+| Idempotency | `UNIQUE(tenant_id, wa_message_id)` + `UNIQUE(reply_to_message_id)` + `jobId: inbound:${id} / send:${id}` |
+| Outbound safety | Atomic `updateMany ... WHERE status IN (...)` claim, `dispatch_attempts < 3`, owner-ordering guard |
+| WhatsApp client | Meta Graph `v21.0`, 10s timeout, retryable classifier (429/5xx/rate-limit yes, 190/131026/24h-window no) |
+| Ops | Bull Board at `/admin/queues`, structured worker logs, outbox sweeper (5m lease expiry, 2m stranded collect) |
+
+## 5. Stack & layout
+
+**Stack:** NestJS 11 · PostgreSQL 16 + pgvector · Prisma 7 · Redis 7 + BullMQ 6 · LangChain + LangGraph · Gemini Flash + Embeddings · Meta WhatsApp Cloud API · JWT (15/30m access + 7d hashed refresh) · Jest + Supertest · Docker Compose (+ ngrok profile).
+
+```
+src/modules/
+├── agent/         # LangGraph builder, node, 5 tools, AgentService
+├── messaging/     # /webhook, MessagesService, inbound/outbound queues + sweeper
+├── booking/       # BookingService, slot utils, reminder queue
+├── conversations/ # inbox API, owner reply, ai/human status
+├── knowledge-base/# sync / chunk / embed / verify (distance ≤ 0.5)
+├── whatsapp/      # Cloud API client, signature auth, error taxonomy
+├── tenantModule/  # signup / login / refresh, Redis tenant resolver
+└── services|doctors|faqs/
+common/            # prisma, tenant-transaction, redis, bullmq, llm, embedding
+prisma/            # schema (tenants, messages outbox, bookings, kb vector)
+docs/              # MESSAGE_QUEUE_ARCHITECTURE.md + specs/
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## 6. Run it
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+docker compose up --build          # app :3000, postgres :5432, redis :6379
+npx prisma migrate deploy
+npm run start:dev
+# queues:  http://localhost:3000/admin/queues
+# webhook: POST /webhook (Meta calls root, excluded from /api versioning)
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Required env: `DATABASE_URL · REDIS_HOST/PORT · GEMINI_API_KEY · META_GRAPH_VERSION · JWT_*_SECRET · WHATSAPP_VERIFY_TOKEN / APP_SECRET`.
 
-## Resources
+## 7. API surface
 
-Check out a few resources that may come in handy when working with NestJS:
+| Area | Endpoints |
+|---|---|
+| Auth | `POST /api/v1/auth/signup · login · refresh` |
+| Clinic data | CRUD `services · doctors · doctor-hours · faqs` + `POST knowledge-base/sync · verify` |
+| Inbox | `GET conversations?status=&page= · GET conversations/:id · POST conversations/:id/reply {content, resumeAi} · PATCH conversations/:id/status` |
+| WhatsApp | `GET /webhook` (verify) · `POST /webhook` (HMAC `X-Hub-Signature-256`, persist-first, 200 fast) |
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Full collection: `postman/AI_Receptionist.postman_collection.json`.
 
-## Support
+## 8. Tests
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```bash
+npm test              # unit: booking.service, booking.tool, booking-slots, whatsapp.client
+npm run test:e2e      # test/agent, test/conversations, test/messaging
+npm run test:cov
+```
 
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Specs live next to code (`*.spec.ts`) + `docs/INBOUND_MESSAGES_TESTING_GUIDE.md`.
