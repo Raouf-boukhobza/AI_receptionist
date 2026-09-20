@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 //
 async function bootstrap() {
   // rawBody:true preserves the exact bytes Meta signed (X-Hub-Signature-256).
@@ -49,6 +50,17 @@ async function bootstrap() {
   app.enableVersioning({
     type: VersioningType.URI,
   });
+
+  // Auto-generated from routes + DTOs via swagger plugin (no @Api* in code).
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('AI Receptionist')
+    .setDescription('Multi-tenant WhatsApp booking agent')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, swaggerDoc);
+
   await app.listen(configService.get<number>('PORT') ?? 3000);
 }
 bootstrap();
