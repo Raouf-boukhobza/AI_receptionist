@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common/interfaces';
 import type { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { MessagesService } from './messages.service';
 import { WhatsappWebhookDto } from './dtos/whatsAppWebhook.dto';
 import { WhatsappWebhookAuthService } from '../whatsapp/whatsapp-webhook-auth.service';
@@ -27,6 +28,7 @@ import { WhatsappWebhookAuthService } from '../whatsapp/whatsapp-webhook-auth.se
  * retries a message we already stored. AI work stays async via BullMQ.
  */
 @Controller({ path: 'webhook', version: VERSION_NEUTRAL })
+@Throttle({ default: { limit: 60, ttl: 60000 } })
 export class WhatsappWebhookController {
   private readonly logger = new Logger(WhatsappWebhookController.name);
 
@@ -37,6 +39,7 @@ export class WhatsappWebhookController {
 
   @Get()
   @Header('Content-Type', 'text/plain')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   verify(
     @Query('hub.mode') mode?: string,
     @Query('hub.verify_token') verifyToken?: string,
