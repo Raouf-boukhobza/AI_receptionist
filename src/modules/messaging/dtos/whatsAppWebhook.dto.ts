@@ -73,15 +73,21 @@ export class StatusDto {
 
 // ---- contacts[] ----
 class ProfileDto {
+    @IsOptional()
     @IsString()
-    name: string;
+    name?: string;
+
+    @IsOptional()
+    @IsString()
+    username?: string;
 }
 
 class ContactDto {
+    @IsOptional()
     @IsObject()
     @ValidateNested()
     @Type(() => ProfileDto)
-    profile: ProfileDto;
+    profile?: ProfileDto;
 
     @IsString()
     wa_id: string;

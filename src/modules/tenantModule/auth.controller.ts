@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { TenantService } from './tenant.service';
 import { SignupDto } from './dtos/signup.dto';
 import { LoginDto } from './dtos/login.dto';
@@ -10,6 +11,7 @@ import { TenantId } from '../../../common/tenant-context/tenant-id.decorator';
   path: 'auth',
   version: '1',
 })
+@Throttle({ default: { limit: 10, ttl: 60000 } })
 export class AuthController {
   constructor(private readonly tenantService: TenantService) {}
   @Post('signup')
