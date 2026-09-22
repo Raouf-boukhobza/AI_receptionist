@@ -44,8 +44,12 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
   // Meta calls GET/POST /webhook at the domain root — keep it outside /api + versioning.
+  // /health stays at root too so deploy probes don't need API versioning.
   app.setGlobalPrefix('api', {
-    exclude: [{ path: 'webhook', method: RequestMethod.ALL }],
+    exclude: [
+      { path: 'webhook', method: RequestMethod.ALL },
+      { path: 'health', method: RequestMethod.GET },
+    ],
   });
   app.enableVersioning({
     type: VersioningType.URI,

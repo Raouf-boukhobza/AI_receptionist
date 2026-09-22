@@ -14,6 +14,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AgentModule } from './modules/agent/agent.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
 import { BookingModule } from './modules/booking/booking.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { BookingModule } from './modules/booking/booking.module';
     AgentModule,
     MessagingModule,
     BookingModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [

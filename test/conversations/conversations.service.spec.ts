@@ -21,6 +21,7 @@ describe('ConversationsService', () => {
       },
       messages: {
         create: jest.fn(),
+        findMany: jest.fn(),
       },
     };
 
@@ -53,11 +54,12 @@ describe('ConversationsService', () => {
         { id: '2', content: 'second message', created_at: new Date('2026-09-07T12:01:00Z') },
         { id: '1', content: 'first message', created_at: new Date('2026-09-07T12:00:00Z') },
       ];
-      mockPrismaService.db.messages.findMany.mockResolvedValue([...messagesDesc]);
+      mockTx.messages.findMany.mockResolvedValue([...messagesDesc]);
 
       const result = await service.fetchRecentMessages('tenant-1', 'conv-1', 10);
 
-      expect(mockPrismaService.db.messages.findMany).toHaveBeenCalledWith({
+      expect(mockTenantTransaction.run).toHaveBeenCalledWith('tenant-1', expect.any(Function));
+      expect(mockTx.messages.findMany).toHaveBeenCalledWith({
         where: {
           tenant_id: 'tenant-1',
           conversation_id: 'conv-1',
