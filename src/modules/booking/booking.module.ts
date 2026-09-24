@@ -1,15 +1,25 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { BookingService } from './booking.service';
 import { ReminderQueue, reminderQueue } from './queue/reminder.queue';
+import { ReminderProcessor } from './queue/reminder.processor';
+import { MessagingModule } from '../messaging/messaging.module';
 import { BullModule } from '@nestjs/bullmq';
 
 @Module({
   imports: [
     BullModule.registerQueue({
       name: reminderQueue,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: { age: 3600, count: 1000 },
+        removeOnFail: { age: 86400 * 7 },
+      },
     }),
+    // forwardRef: MessagingModule -> AgentModule -> BookingModule (cycle).
+    forwardRef(() => MessagingModule),
   ],
-  providers: [BookingService, ReminderQueue],
+  providers: [BookingService, ReminderQueue, ReminderProcessor],
   exports: [BookingService, ReminderQueue],
 })
 export class BookingModule {}

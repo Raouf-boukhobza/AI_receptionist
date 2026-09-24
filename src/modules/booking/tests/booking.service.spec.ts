@@ -504,7 +504,7 @@ describe('BookingService', () => {
 
       expect(mockReminderQueue.addJob).toHaveBeenCalledTimes(1);
       expect(mockReminderQueue.addJob).toHaveBeenCalledWith(
-        bookingId,
+        { bookingId, tenantId },
         new Date('2026-08-25T09:00:00'),
       );
       expect(mockTx.bookings.update).toHaveBeenCalledWith({
