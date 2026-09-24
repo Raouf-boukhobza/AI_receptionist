@@ -4,6 +4,8 @@ import { ReminderQueue, reminderQueue } from './queue/reminder.queue';
 import { ReminderProcessor } from './queue/reminder.processor';
 import { MessagingModule } from '../messaging/messaging.module';
 import { BullModule } from '@nestjs/bullmq';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 
 @Module({
   imports: [
@@ -18,6 +20,10 @@ import { BullModule } from '@nestjs/bullmq';
     }),
     // forwardRef: MessagingModule -> AgentModule -> BookingModule (cycle).
     forwardRef(() => MessagingModule),
+    BullBoardModule.forFeature({
+      name: reminderQueue,
+      adapter: BullMQAdapter,
+    }),
   ],
   providers: [BookingService, ReminderQueue, ReminderProcessor],
   exports: [BookingService, ReminderQueue],
