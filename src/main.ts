@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import { AppModule, ObserveInstrument } from './app.module';
 import {
   RequestMethod,
   ValidationPipe,
@@ -11,7 +11,10 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 //
 async function bootstrap() {
   // rawBody:true preserves the exact bytes Meta signed (X-Hub-Signature-256).
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+    instrument: ObserveInstrument,
+  });
   const configService = app.get(ConfigService);
 
 

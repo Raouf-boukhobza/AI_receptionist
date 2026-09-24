@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ConfigService } from '@nestjs/config';
+import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CommonModule } from '../common/common.module';
@@ -16,9 +18,26 @@ import { MessagingModule } from './modules/messaging/messaging.module';
 import { BookingModule } from './modules/booking/booking.module';
 import { HealthModule } from './modules/health/health.module';
 
+export const { ObserveModule, ObserveInstrument } = createObserveModule();
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ObserveModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const appKey = config.get<string>('OBSERVE_APP_KEY', '');
+        const appSecret = config.get<string>('OBSERVE_APP_SECRET', '');
+        return {
+          appKey,
+          appSecret,
+          serviceId: 'ai-receptionist',
+          // No keys (CI/tests) -> SDK stays off instead of crashing boot.
+          enabled: appKey.trim() !== '' && appSecret.trim() !== '',
+          http: { ignore: [/^\/health(?:\?|$)/] },
+        };
+      },
+    }),
     ThrottlerModule.forRoot([
       { name: 'default', ttl: 60000, limit: 100 },
     ]),
