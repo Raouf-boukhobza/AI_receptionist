@@ -355,7 +355,7 @@ export class BookingService {
 
       if (timeOneDayBefore.getTime() > now) {
         const job = await this.reminderQueue.addJob(
-          bookingId,
+          { bookingId, tenantId },
           timeOneDayBefore,
         );
         reminder_24h_job_id = job?.id;
@@ -363,7 +363,7 @@ export class BookingService {
 
       if (timeOneHourBefore.getTime() > now) {
         const job = await this.reminderQueue.addJob(
-          bookingId,
+          { bookingId, tenantId },
           timeOneHourBefore,
         );
         reminder_1h_job_id = job?.id;

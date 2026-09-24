@@ -249,4 +249,83 @@ describe('WhatsappClient', () => {
       expect(err.retryable).toBe(true);
     }
   });
+
+  it('sends templates with name, language and body params', async () => {
+    mockPrismaService.rawClient.tenants.findUnique.mockResolvedValue({
+      phone_number_id: 'pn-12345',
+      access_token: 'secret-token',
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({
+        messages: [{ id: 'wamid.tpl.1' }],
+      }),
+    } as any);
+
+    const result = await client.sendTemplate({
+      tenantId: 'tenant-1',
+      to: '+1234567890',
+      templateName: 'appointment_reminder',
+      languageCode: 'en',
+      bodyParams: ['Dental cleaning', '2026-09-23', '10:00'],
+    });
+
+    expect(result).toEqual({ wamid: 'wamid.tpl.1' });
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://graph.facebook.com/v21.0/pn-12345/messages',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: '1234567890',
+          type: 'template',
+          template: {
+            name: 'appointment_reminder',
+            language: { code: 'en' },
+            components: [
+              {
+                type: 'body',
+                parameters: [
+                  { type: 'text', text: 'Dental cleaning' },
+                  { type: 'text', text: '2026-09-23' },
+                  { type: 'text', text: '10:00' },
+                ],
+              },
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
+  it('handles template config errors (132xxx) as non-retryable', async () => {
+    mockPrismaService.rawClient.tenants.findUnique.mockResolvedValue({
+      phone_number_id: 'pn-12345',
+      access_token: 'token',
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: jest.fn().mockResolvedValue({
+        error: { message: 'Template does not exist', code: 132000 },
+      }),
+    } as any);
+
+    try {
+      await client.sendTemplate({
+        tenantId: 'tenant-1',
+        to: '+1234567890',
+        templateName: 'nope',
+        bodyParams: [],
+      });
+      fail('Should have thrown');
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(WhatsappSendError);
+      expect(err.retryable).toBe(false);
+    }
+  });
 });

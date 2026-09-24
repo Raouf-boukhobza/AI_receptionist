@@ -45,13 +45,24 @@ export class OutboundMessagesProcessor extends WorkerHost {
     }
 
     // Phase B: Send (outside DB transaction)
+    // Template rows (reminders) go via sendTemplate — exempt from Meta's 24h
+    // window. Everything else uses free-form text.
     let wamid: string;
     try {
-      const result = await this.whatsappClient.sendText({
-        tenantId,
-        to: claimed.conversations.client_phone,
-        body: claimed.content,
-      });
+      const template = parseTemplateFields(claimed.template_name, claimed.template_params);
+      const result = template
+        ? await this.whatsappClient.sendTemplate({
+            tenantId,
+            to: claimed.conversations.client_phone,
+            templateName: template.name,
+            languageCode: template.languageCode,
+            bodyParams: template.bodyParams,
+          })
+        : await this.whatsappClient.sendText({
+            tenantId,
+            to: claimed.conversations.client_phone,
+            body: claimed.content,
+          });
       wamid = result.wamid;
     } catch (error: any) {
       const isRetryable = error instanceof WhatsappSendError ? error.retryable : true;
@@ -285,4 +296,43 @@ export class OutboundMessagesProcessor extends WorkerHost {
       }
     });
   }
+}
+
+export interface TemplateSend {
+  name: string;
+  languageCode?: string;
+  bodyParams: string[];
+}
+
+/**
+ * Reads template routing off a claimed outbox row. Returns null for plain-text
+ * rows (template_name unset). Tolerates params stored as object or JSON string.
+ */
+export function parseTemplateFields(
+  templateName: string | null | undefined,
+  templateParams: unknown,
+): TemplateSend | null {
+  if (!templateName) {
+    return null;
+  }
+  let parsed: { languageCode?: unknown; bodyParams?: unknown } = {};
+  if (typeof templateParams === 'string' && templateParams.trim() !== '') {
+    try {
+      parsed = JSON.parse(templateParams) as typeof parsed;
+    } catch {
+      parsed = {};
+    }
+  } else if (templateParams && typeof templateParams === 'object') {
+    parsed = templateParams as typeof parsed;
+  }
+  return {
+    name: templateName,
+    languageCode:
+      typeof parsed.languageCode === 'string' && parsed.languageCode.trim() !== ''
+        ? parsed.languageCode
+        : undefined,
+    bodyParams: Array.isArray(parsed.bodyParams)
+      ? parsed.bodyParams.map((p) => String(p))
+      : [],
+  };
 }

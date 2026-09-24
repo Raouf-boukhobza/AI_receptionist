@@ -118,6 +118,8 @@ model messages {
   last_error          String?
   dispatched_at       DateTime?       @db.Timestamptz(6)
   delivered_at        DateTime?       @db.Timestamptz(6)
+  template_name       String?
+  template_params     Json?
   conversations       conversations   @relation(fields: [conversation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   messages            messages?       @relation("messagesTomessages", fields: [reply_to_message_id], references: [id], onUpdate: NoAction)
   other_messages      messages?       @relation("messagesTomessages")
@@ -225,6 +227,7 @@ enum message_sender {
   client
   ai
   owner
+  system
 }
 
 enum booking_status {

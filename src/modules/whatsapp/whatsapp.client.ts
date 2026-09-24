@@ -9,6 +9,14 @@ export interface SendTextParams {
   body: string;
 }
 
+export interface SendTemplateParams {
+  tenantId: string;
+  to: string;
+  templateName: string;
+  languageCode?: string;
+  bodyParams?: string[];
+}
+
 export interface SendTextResult {
   wamid: string;
 }
@@ -26,22 +34,60 @@ export class WhatsappClient {
   }
 
   async sendText(params: { tenantId: string; to: string; body: string }): Promise<SendTextResult> {
+    return this.sendPayload(params.tenantId, params.to, {
+      type: 'text',
+      text: { body: params.body },
+    });
+  }
+
+  /**
+   * Sends an approved Meta template (utility/category). Templates are exempt
+   * from the 24h customer-service window, which is why appointment reminders
+   * must use this instead of free-form text.
+   */
+  async sendTemplate(params: {
+    tenantId: string;
+    to: string;
+    templateName: string;
+    languageCode?: string;
+    bodyParams?: string[];
+  }): Promise<SendTextResult> {
+    return this.sendPayload(params.tenantId, params.to, {
+      type: 'template',
+      template: {
+        name: params.templateName,
+        language: { code: params.languageCode ?? 'en' },
+        components: [
+          {
+            type: 'body',
+            parameters: (params.bodyParams ?? []).map((text) => ({ type: 'text', text })),
+          },
+        ],
+      },
+    });
+  }
+
+  private async sendPayload(
+    tenantId: string,
+    to: string,
+    payload: Record<string, unknown>,
+  ): Promise<SendTextResult> {
     const tenant = await this.prismaService.rawClient.tenants.findUnique({
-      where: { id: params.tenantId },
+      where: { id: tenantId },
       select: { phone_number_id: true, access_token: true },
     });
 
     if (!tenant || !tenant.phone_number_id || !tenant.access_token) {
-      this.logger.error(`Tenant ${params.tenantId} is missing WhatsApp credentials`);
+      this.logger.error(`Tenant ${tenantId} is missing WhatsApp credentials`);
       throw new WhatsappSendError(
         'NO_CREDENTIALS',
         false,
-        `Tenant ${params.tenantId} is missing WhatsApp credentials`,
+        `Tenant ${tenantId} is missing WhatsApp credentials`,
       );
     }
 
     const { phone_number_id, access_token } = tenant;
-    const cleanTo = params.to.replace(/\D/g, '');
+    const cleanTo = to.replace(/\D/g, '');
     const url = `https://graph.facebook.com/${this.graphVersion}/${phone_number_id}/messages`;
 
     const controller = new AbortController();
@@ -58,8 +104,7 @@ export class WhatsappClient {
           messaging_product: 'whatsapp',
           recipient_type: 'individual',
           to: cleanTo,
-          type: 'text',
-          text: { body: params.body },
+          ...payload,
         }),
         signal: controller.signal,
       });
@@ -73,7 +118,7 @@ export class WhatsappClient {
         const message = metaError?.message || `Meta API responded with HTTP ${response.status}`;
 
         this.logger.error(
-          `WhatsApp send failed for tenant ${params.tenantId}, phone_number_id: ${phone_number_id}. Code: ${code}, fbtrace_id: ${fbtraceId}`,
+          `WhatsApp send failed for tenant ${tenantId}, phone_number_id: ${phone_number_id}. Code: ${code}, fbtrace_id: ${fbtraceId}`,
         );
 
         const retryable = this.isRetryable(response.status, metaError?.code);
@@ -93,7 +138,7 @@ export class WhatsappClient {
       }
 
       this.logger.log(
-        `WhatsApp message sent successfully. wamid: ${wamid} for tenant ${params.tenantId}`,
+        `WhatsApp message sent successfully. wamid: ${wamid} for tenant ${tenantId}`,
       );
       return { wamid };
     } catch (err: any) {
@@ -125,6 +170,9 @@ export class WhatsappClient {
     }
     if (metaCode === 190 || metaCode === 131026 || metaCode === 131047 || metaCode === 100) {
       return false; // Auth / Invalid recipient / 24h window closed / Bad request
+    }
+    if (metaCode !== undefined && metaCode >= 132000 && metaCode <= 133999) {
+      return false; // Template config errors (unknown/rejected template, bad params): retrying won't help
     }
     if (httpStatus >= 400 && httpStatus < 500) {
       return false;

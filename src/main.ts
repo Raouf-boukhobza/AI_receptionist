@@ -14,6 +14,18 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   const configService = app.get(ConfigService);
 
+
+  if (configService.get<string>('NODE_ENV') !== 'test') {
+    for (const secretKey of ['JWT_SECRET', 'JWT_REFRESH_SECRET'] as const) {
+      const value = configService.get<string>(secretKey);
+      if (!value || value.includes('change-me')) {
+        throw new Error(
+          `${secretKey} is missing or still a placeholder. Set a long random value in .env (see .env.example).`,
+        );
+      }
+    }
+  }
+
   app.use(helmet());
 
 
@@ -44,8 +56,12 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
   // Meta calls GET/POST /webhook at the domain root — keep it outside /api + versioning.
+  // /health stays at root too so deploy probes don't need API versioning.
   app.setGlobalPrefix('api', {
-    exclude: [{ path: 'webhook', method: RequestMethod.ALL }],
+    exclude: [
+      { path: 'webhook', method: RequestMethod.ALL },
+      { path: 'health', method: RequestMethod.GET },
+    ],
   });
   app.enableVersioning({
     type: VersioningType.URI,

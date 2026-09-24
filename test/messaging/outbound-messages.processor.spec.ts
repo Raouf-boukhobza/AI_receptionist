@@ -29,6 +29,7 @@ describe('OutboundMessagesProcessor', () => {
 
     mockWhatsappClient = {
       sendText: jest.fn(),
+      sendTemplate: jest.fn(),
     };
 
     mockTenantTransaction = {
@@ -206,6 +207,75 @@ describe('OutboundMessagesProcessor', () => {
         },
       });
       expect(mockWhatsappClient.sendText).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Template routing', () => {
+    it('sends template rows via sendTemplate and marks sent', async () => {
+      mockTx.messages.updateMany.mockResolvedValue({ count: 1 });
+      mockTx.messages.findUniqueOrThrow.mockResolvedValue({
+        id: 'm-rem-1',
+        conversation_id: 'c-1',
+        sender: 'system',
+        content: 'Reminder: you have Dental cleaning on 2026-09-23 at 10:00.',
+        dispatch_attempts: 1,
+        template_name: 'appointment_reminder',
+        template_params: {
+          languageCode: 'en',
+          bodyParams: ['Dental cleaning', '2026-09-23', '10:00'],
+        },
+        conversations: { id: 'c-1', client_phone: '+123', status: 'human_active', version: 1 },
+      });
+      mockWhatsappClient.sendTemplate.mockResolvedValue({ wamid: 'wamid.rem.1' });
+
+      const job: any = {
+        name: 'send',
+        data: { tenantId: 't-1', messageId: 'm-rem-1' },
+      };
+
+      await processor.process(job);
+
+      expect(mockWhatsappClient.sendTemplate).toHaveBeenCalledWith({
+        tenantId: 't-1',
+        to: '+123',
+        templateName: 'appointment_reminder',
+        languageCode: 'en',
+        bodyParams: ['Dental cleaning', '2026-09-23', '10:00'],
+      });
+      expect(mockWhatsappClient.sendText).not.toHaveBeenCalled();
+      expect(mockTx.messages.updateMany).toHaveBeenCalledWith({
+        where: { id: 'm-rem-1', status: 'sending' },
+        data: {
+          status: 'sent',
+          wa_message_id: 'wamid.rem.1',
+          last_error: null,
+        },
+      });
+    });
+
+    it('sends plain rows via sendText when no template is set', async () => {
+      mockTx.messages.updateMany.mockResolvedValue({ count: 1 });
+      mockTx.messages.findUniqueOrThrow.mockResolvedValue({
+        id: 'm-plain-1',
+        conversation_id: 'c-1',
+        sender: 'ai',
+        content: 'Hello',
+        dispatch_attempts: 1,
+        template_name: null,
+        template_params: null,
+        conversations: { id: 'c-1', client_phone: '+123', status: 'ai_active', version: 1 },
+      });
+      mockWhatsappClient.sendText.mockResolvedValue({ wamid: 'wamid.plain.1' });
+
+      const job: any = {
+        name: 'send',
+        data: { tenantId: 't-1', messageId: 'm-plain-1' },
+      };
+
+      await processor.process(job);
+
+      expect(mockWhatsappClient.sendText).toHaveBeenCalled();
+      expect(mockWhatsappClient.sendTemplate).not.toHaveBeenCalled();
     });
   });
 

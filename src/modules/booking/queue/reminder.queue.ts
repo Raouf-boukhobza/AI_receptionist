@@ -4,15 +4,24 @@ import { Injectable } from '@nestjs/common';
 
 export const reminderQueue = 'REMINDER_QUEUE';
 
+/** Default template used for appointment reminders (Meta dashboard must approve it). */
+export const REMINDER_TEMPLATE_NAME = 'appointment_reminder';
+export const REMINDER_TEMPLATE_LANGUAGE = 'en';
+
+export interface ReminderJob {
+  bookingId: string;
+  tenantId: string;
+}
+
 @Injectable()
 export class ReminderQueue {
   constructor(
-    @InjectQueue(reminderQueue) private readonly queue: Queue<string>,
+    @InjectQueue(reminderQueue) private readonly queue: Queue<ReminderJob>,
   ) {}
 
-  async addJob(bookingId: string , date : Date ) : Promise<Job> {
-    return this.queue.add('send-reminder', bookingId, {
-      delay : date.getTime() - new Date().getTime()
+  async addJob(data: ReminderJob, date: Date): Promise<Job<ReminderJob>> {
+    return this.queue.add('send-reminder', data, {
+      delay: date.getTime() - new Date().getTime(),
     });
   }
 
