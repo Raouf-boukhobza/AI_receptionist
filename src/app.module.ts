@@ -1,23 +1,21 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { ConfigService } from '@nestjs/config';
 import { createObserveModule } from '@nestjs/observe';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { CommonModule } from '../common/common.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { CommonModule } from '../common/common.module';
-import { TenantModule } from './modules/tenantModule/tenant.module';
-import { ServicesModule } from './modules/services/services.module';
+import { AgentModule } from './modules/agent/agent.module';
+import { BookingModule } from './modules/booking/booking.module';
+import { ConversationsModule } from './modules/conversations/conversations.module';
 import { DoctorsModule } from './modules/doctors/doctors.module';
 import { FaqsModule } from './modules/faqs/faqs.module';
-import { KnowledgeBaseModule } from './modules/knowledge-base/knowledge-base.module';
-import { ConversationsModule } from './modules/conversations/conversations.module';
-import { ConfigModule } from '@nestjs/config';
-import { AgentModule } from './modules/agent/agent.module';
-import { MessagingModule } from './modules/messaging/messaging.module';
-import { BookingModule } from './modules/booking/booking.module';
 import { HealthModule } from './modules/health/health.module';
-
+import { KnowledgeBaseModule } from './modules/knowledge-base/knowledge-base.module';
+import { MessagingModule } from './modules/messaging/messaging.module';
+import { ServicesModule } from './modules/services/services.module';
+import { TenantModule } from './modules/tenantModule/tenant.module';
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
@@ -44,7 +42,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     CommonModule,
     TenantModule,
     ServicesModule,
-    DoctorsModule,
+      DoctorsModule,
     FaqsModule,
     KnowledgeBaseModule,
     ConversationsModule,
